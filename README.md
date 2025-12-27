@@ -1,4 +1,4 @@
-Astro330实验部分的练习，来自https://astro-330.github.io/intro.html，这是耶鲁大学 Imad Pasha 和 Marla Geha 教授的课程 Astro 330 的存储库。
+Astro330实验部分的练习，来自https://astro-330.github.io/intro.html， 这是耶鲁大学 Imad Pasha 和 Marla Geha 教授的课程 Astro 330 的存储库。
 
 **About the Course**
 
