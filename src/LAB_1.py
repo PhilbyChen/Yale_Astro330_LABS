@@ -12,8 +12,7 @@ array01 = np.random.normal(loc = 10, scale = 2, size = (1000,1000))
 
 plt.figure(figsize = (10,10))
 plt.imshow(array01, cmap='viridis', aspect='auto', interpolation='nearest', origin ='lower')
-plt.tight_layout()
-plt.show()
+
 
 
 
@@ -41,8 +40,7 @@ plt.plot(x_coords[:30], y_coords[:30],
          markerfacecolor='none', # 关键：空心
          alpha=0.8)
 plt.title(f'标记3σ离群值\nμ={mean:.2f}, σ={std:.2f}')
-plt.tight_layout()
-plt.show()
+
 
 
 
@@ -114,8 +112,6 @@ plt.figure(figsize=(10, 10))
 plt.imshow(zoomed_result, cmap='gray_r', origin='lower', aspect='auto')
 plt.colorbar()
 
-plt.tight_layout()
-plt.show()
 
 
 
@@ -187,6 +183,28 @@ Create some arrays of a and b to test that range between 1 and 25, and have 10 e
  要创建这个网格，请使用函数 np.meshgrid() 对于你的地块，确保记号笔尺寸足够大，能清楚看到颜色。
 '''
 
+def chi2(a,b):
+    return ((15-a)**2+(12-b)**2)**0.2 #note, this is nonsense, but should return a different value for each input a,b
+# 在二维参数空间 a,b 中以参数拟合 χ2，并用颜色表示
+
+# np.linspace(start, stop, num)
+a_values = np.linspace(1, 25, 10)
+b_values = np.linspace(1, 25, 10)
+
+A_grid, B_grid = np.meshgrid(a_values, b_values)
+
+chi2_matrix = np.zeros((10, 10))
+# 使用双重循环计算每个 a,b 坐标的 χ²值
+for i in range(10):      # i: 行索引，对应 b_values[i]
+    for j in range(10):  # j: 列索引，对应 a_values[j]
+        chi2_matrix[i, j] = chi2(a_values[j], b_values[i])
+
+plt.figure(figsize=(12, 10))
+scatter = plt.scatter(A_grid, B_grid, c=chi2_matrix, s=800, cmap='viridis')
+plt.colorbar(label='χ²')
+
+plt.tight_layout()
+plt.show()
 
 
 
@@ -194,8 +212,7 @@ Create some arrays of a and b to test that range between 1 and 25, and have 10 e
 '''Question 7
 Re-show your final plot above, making the following changes:
 
-label your colorbar as χ2
- using latex notation, with a fontsize>13
+label your colorbar as χ2 using latex notation, with a fontsize>13
 
 Make your ticks point inward and be longer
 
@@ -204,6 +221,30 @@ Make your ticks appear on the top and right hand axes of the plot as well
 If you didn’t already, label the x and y axes appropriately and with a font size > 13
 
 Make sure the numbers along the axes have fontsizes > 13'''
+
+ax = plt.gca() # 获取当前坐标轴命令
+ax.tick_params(
+    direction='in',   # 刻度方向：向内
+    length=8,         # 刻度长度：8点
+    width=1.5,        # 刻度宽度：1.5点  
+    labelsize=14,     # 刻度数字大小：14号
+    which='both',     # 应用到：主刻度和次刻度
+    top=True,         # 顶部显示刻度
+    right=True        # 右侧显示刻度
+)
+ax.set_xlabel('Parameter a', fontsize=15)
+ax.set_ylabel('Parameter b', fontsize=15)
+
+cbar = plt.colorbar(scatter)
+cbar.set_label(r'$\chi^2$',   # LaTeX格式的χ²
+               fontsize=16,   # 字体大小16
+               rotation=0,    # 不旋转（0度）
+               labelpad=15)   # 与颜色条的距离
+
+plt.tight_layout()
+plt.show()
+
+
 
 
 
@@ -223,13 +264,27 @@ for city in all_cities:
         
 print(not_visited)
 
-Next, create an array of integers including 1 through 30, inclusive. Using a comprehension, create a numpy array containing the squared value of only the odd numbers in your original array. (Hint, remember the modulo operator)
+Next, create an array of integers including 1 through 30, inclusive. Using a comprehension, 
+create a numpy array containing the squared value of only the odd numbers in your original array. (Hint, remember the modulo operator)
 接着，创建一个包含 1 到 30 的整数数组。利用理解法，创建一个 numpy 数组，只包含原始数组中奇数的平方值。（提示，记住模算子）
 
 In the next example, you have a list of first names and a list of last names. Use a list comprehension to create an array that is a list of full names (with a space between first and last names).
 在下一个例子中，你有一个名字列表和一个姓氏列表。使用列表理解创建一个数组，包含全名（名字和姓氏之间留空格）。
-
 '''
+visited_cities = ['San Diego', 'Boston', 'New York City','Atlanta']
+all_cities = ['San Diego', 'Denver', 'Boston', 'Portland', 'New York City', 'San Francisco', 'Atlanta']
+
+# not_visited = []
+# for city in all_cities:
+#     if city not in visited_cities:
+#         not_visited.append(city)
+
+not_visited = [city for city in all_cities if city not in visited_cities]
+print(not_visited)
+
+Rarr = np.arange(1,31)
+odd_num = [x**2 for x in Rarr if x % 2 == 1]
+print(odd_num)
 
 
 
@@ -237,8 +292,11 @@ In the next example, you have a list of first names and a list of last names. Us
 Take the arrays XX, YY, and ZZ below and create one multidimensional array in which they are the columns. Print to confirm this worked.
 取数组 XX 、 YY 和 ZZ 下，创建一个多维数组，其中它们是列。打印确认是否有效。
 '''
+XX = np.array([1,2,3,4,5,6,7,8,9])
+YY = np.array([5,6,7,8,9,10,11,12,13])
+ZZ = np.array([10,11,12,13,14,15,16,17,18])
 
-
+multidim_arr = np.column_stack((XX, YY, ZZ))
 
 '''Question 10
  This next question serves as an introduction to the units module in astropy
