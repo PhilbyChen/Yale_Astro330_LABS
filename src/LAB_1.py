@@ -176,7 +176,8 @@ Create some arrays of a and b to test that range between 1 and 25, and have 10 e
  using my function.
 创建一个数组 b 和 a ，测试 1 到 25 之间的范围，并在这些值之间均匀分布 10 个条目。然后，循环它们，找到 χ2 使用我的函数。
 
- Once you’ve stored the χ2 values for each combination of a and b, create a plot with a and b as the axes and show using colored circles the χ2 value at each location. Add a colorbar to see the values being plotted.
+ Once you’ve stored the χ2 values for each combination of a and b, create a plot with a and b as the axes and show using colored circles the χ2 value at each location. 
+ Add a colorbar to see the values being plotted.
  存储好 每个组合 a 和的 χ2 值后 b ，创建一个以 a 和 b 为轴的图，并用彩色圆圈 显示每个位置的 χ2 值。添加一个颜色条来查看正在绘制的数值。
 
  To create this grid, use the np.meshgrid() function. For your plot, make sure the marker size is big enough to see the colors well.
@@ -249,7 +250,8 @@ plt.show()
 
 
 '''Question 8
-Some quick list comprehensions! For any unfamilar, comprehensions are pythonic statements that allow you to compress a for-loop (generally) into a single line, and usually runs faster than a full loop (but not by a ton).
+Some quick list comprehensions! For any unfamilar, comprehensions are pythonic statements that allow you to compress a for-loop (generally) into a single line, 
+and usually runs faster than a full loop (but not by a ton).
 快速理解一下清单！对于任何不熟悉的人来说，理解是非常有技巧的语句，可以让你把一个 for 循环（通常）压缩成一行，通常比完整循环快（但不会快很多）。
 Take the for-loop below and write it as a list comprehension.
     
@@ -268,7 +270,8 @@ Next, create an array of integers including 1 through 30, inclusive. Using a com
 create a numpy array containing the squared value of only the odd numbers in your original array. (Hint, remember the modulo operator)
 接着，创建一个包含 1 到 30 的整数数组。利用理解法，创建一个 numpy 数组，只包含原始数组中奇数的平方值。（提示，记住模算子）
 
-In the next example, you have a list of first names and a list of last names. Use a list comprehension to create an array that is a list of full names (with a space between first and last names).
+In the next example, you have a list of first names and a list of last names. Use a list comprehension to create an array that is a list of full names 
+(with a space between first and last names).
 在下一个例子中，你有一个名字列表和一个姓氏列表。使用列表理解创建一个数组，包含全名（名字和姓氏之间留空格）。
 '''
 visited_cities = ['San Diego', 'Boston', 'New York City','Atlanta']
@@ -298,9 +301,91 @@ ZZ = np.array([10,11,12,13,14,15,16,17,18])
 
 multidim_arr = np.column_stack((XX, YY, ZZ))
 
+
+
+##################################################################################################################################################
 '''Question 10
- This next question serves as an introduction to the units module in astropy
+Units, units, units. The bane of every scientists’ existence… except theorists that set every constant equal to 1.
+单位，单位，单位。每个科学家的噩梦......除了那些将每个常数都设为 1 的理论家。
+
+In the real world, we measure fluxes or magnitudes in astronomical images, infer temperatures and densities from data and simulations, 
+and ultimately have to deal with units one way or another.
+在现实世界中，我们测量天文图像中的通量或星等，通过数据和模拟推断温度和密度，最终不得不以某种方式处理单位。
+
+Thankfully, our friends at astropy know this, and they’ve come to save the day. This next question serves as an introduction to the units module in astropy,
+which can be both a live saver and a pain in the ass, but at the end of the day is absolutely worth learning.
+幸运的是，我们的朋友 astropy 们知道这一点，他们来拯救了大家。接下来这个问题是对 AstroPy 模块 units 的入门介绍，这个模块既是救命宝，也可能麻烦，但归根结底绝对值得学习。
 
 The standard import for this library is u, so be careful not to name any variables that letter.
 该库的标准导入是 u ，所以请注意不要把变量命名为该字母。
+
+To “assign” units to a variable, we multiply by the desired unit as follows. 
+Note that generally the module knows several aliases/common abrreviations for a unit, if it is uniquely identifiable.
+要“赋值”给变量，我们按如下方式乘以所需的单位。注意，通常该模块知道多个别名/常见缩写，如果该单元是唯一可识别的。
+ star_temp = 5000*u.K 
+ star_radius = 0.89 * u.Rsun 
+ star_mass = 0.6 * u.Msun
+
+We can perform trivial conversions using the .to() method.
+我们可以用该 .to() 方法进行平凡的转换。
+
+ star_radius.to(u.km)
+
+Once we attach units to something, it is now a Quantity object. Quantity objects are great, above, we saw they have built-in methods to facilitate conversion. 
+They can also be annoying – sometimes another function we’ve written needs just the raw value or array back out. To get this, we use the .value attribute of a quantity object:
+一旦我们把单位附加到某物上，它就是一个 Quantity 对象。数量对象很棒，上面我们看到它们内置了促进转换的方法。它们也可能让人烦——有时我们写的另一个函数只需要重新输出原始值或数组。
+为此，我们使用一个数量对象的 .value 属性：
+
+ star_mass.to(u.kg).value
+ 1.1930459224188305e+30
+This now strips away all Quantity stuff and gives us an array or value to use elsewhere in our code.
+这样就剥离了所有 Quantity 内容，给出了一个数组或值，可以在代码的其他地方使用。
+
+
+Units are great because they help us combine quantities while tracking units and dimensional analysis. 
+A common operation in astronomy is converting a flux to a luminosity given a distance, using
+单位很棒，因为它们帮助我们在跟踪单位和量纲分析时合并数量。天文学中常见的作是将通量转换为给定距离的光度，使用
+
+F=L4πD2
+where L
+ is the luminosity and D
+ is the distance to the source.
+其中 L
+ 是光度， D
+ 是距离光源的距离。
+What if I’ve made a flux measurement in astronomical units such as erg/s/cm2
+, and I want to know the luminosity in solar luminosities, and my distance happens to be in Mpc? Regardless of my input units, I can easily do this:
+如果我用天文单位（如 erg/s/cm 2）测量通量，想知道太阳光度中的光度，而我的距离恰好是以 Mpc 为单位呢？无论输入单位如何，我都能轻松做到：
+
+ L = 4 * np.pi * (3.6*u.Mpc)**2 * (7.5e-14 * u.erg/u.s/u.cm**2)
+ L.to(u.Lsun)
+
+ 
+The virial temperature of a galaxy halo is given roughly by
+星系晕的维里温度大致为
+
+Tvir≃5.6×104K(μ0.59)(Mhalo1010M⊙)2/3(1+z4)
+where here, we can assume μ
+ is 0.59.
+这里，我们可以假设 μ
+ 为 0.59。
+
+Write a function that takes as an input a halo mass, redshift, and optionally μ
+ (default 0.59), and returns the virial temperature in Kelvin. Your function should take in an astropy quantity with mass units,
+ but should allow for the mass to be input with any appropriate units.
+写一个函数，输入为光环质量、红移，以及可选 μ的（默认 0.59），并返回开尔文单位的维里温度。你的函数应当接受一个带有质量单位的天体量，但也应允许用任何合适的单位输入质量。
 '''
+
+import astropy.units as u
+
+def virial_T(halomass,redshift,mu=0.59):
+
+    if isinstance(halomass, u.Quantity):
+        # 带有单位的Quantity输入
+        M_halo = halomass.to(u.Msun).value
+    else:
+        # 纯数字输入（假定为太阳质量）
+        M_halo = halomass
+
+    Tvir = 5.6e4 * (mu/0.59) * (M_halo/1e10) ** (2/3) * ((1 + redshift) / 4)
+    return Tvir * u.K
