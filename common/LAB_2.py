@@ -1,13 +1,9 @@
 from astropy.io import fits
 import os
+import matplotlib.pyplot as plt
+import numpy as np
 
 def load_fits(filepath, extension = 0, *args):
-    '''
-    Write a function which takes as its argument a string filepath to a FITS file, 
-    and should have an optional argument to set the extension (default 0). 
-    It should then load the given extension of that fits file using a context manager, 
-    and return a tuple containing the header and data of that extension.
-    '''
     '''
     Load a specific extension from a FITS file.
     
@@ -28,5 +24,40 @@ def load_fits(filepath, extension = 0, *args):
     '''
     with fits.open(filepath) as hdul:
         hdu = hdul[extension]
-        return hdul.header.copy(), hdu.data
+        return hdu.header.copy(), hdu.data
     pass
+
+filepath = "D:\\Documents\\GitHub\\Yale_Astro330_LABS\\data\\lab2_data\\antenna_Rband.fits"
+
+def implot(image, figsize=(15, 13), cmap ='gray_r', scale = 0.5, **kwargs):
+    '''
+    input:
+    image (2D array or masked array)
+    cmap 颜色映射名称--反向灰度
+    scale 对比度缩放因子
+    output:
+    fig, ax
+    '''
+    header, image, data = load_fits(filepath)
+    print(f"header: {header}")
+    print(f"数据形状: {data.shape}")
+
+    fig, ax = plt.subplots(figsize=figsize)
+
+    mu = np.nanmean(image)      # 平均值
+    sigma = np.nanstd(image)    # 标准差
+    # 计算基于scale的默认值
+    default_vmin = mu - scale * sigma
+    default_vmax = mu + scale * sigma
+    # 检查kwargs中是否有vmin/vmax
+    if 'vmin' not in kwargs:
+        kwargs['vmin'] = default_vmin
+    if 'vmax' not in kwargs:
+        kwargs['vmax'] = default_vmax
+
+    im = ax.imshow(image, cmap = cmap, **kwargs)
+    
+    return fig, ax
+
+plt.tight_layout()
+plt.show()
