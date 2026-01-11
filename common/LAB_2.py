@@ -2,10 +2,12 @@ from astropy.io import fits
 import os
 import matplotlib.pyplot as plt
 import numpy as np
-
 from astropy.wcs import WCS
+from astropy.nddata import Cutout2D
+from astropy.coordinates import SkyCoord
+import astropy.units as u
 
-## 2 Data I/O
+## 问题 2： Data I/O
 def load_fits(filepath, extension = 0, *args):
     '''
     Load a specific extension from a FITS file.
@@ -37,7 +39,7 @@ def strip_SIP(header):
         del header[b]
     return header
 
-def implot(image, figsize=(15, 13), cmap ='gray_r', scale = 0.5, 
+def implot(image, figsize=(9, 9), cmap ='gray_r', scale = 0.5, 
            colorbar = False, header = None, wcs = None, 
            **kwargs):
     '''
@@ -67,7 +69,6 @@ def implot(image, figsize=(15, 13), cmap ='gray_r', scale = 0.5,
     fig, ax
         figure and axes objects containing currently plotted data.
     '''
-    header = strip_SIP(header)
     # 如果提供了header但没提供wcs，从header创建wcs
     # if header is not None 和 if header 不一样！
     final_wcs = None
@@ -96,27 +97,36 @@ def implot(image, figsize=(15, 13), cmap ='gray_r', scale = 0.5,
     im = ax.imshow(image, cmap = cmap, origin='lower', vmin=vmin, vmax=vmax)
 
     if final_wcs is not None:
-        ax.coords[0].set_axislabel('pos.eq.ra')
-        ax.coords[1].set_axislabel('pos.eq.dec')
+        ax.coords[0].set_axislabel('Right Ascension [hms]', fontsize=15)
+        ax.coords[1].set_axislabel('Declination [degrees]', fontsize=15)
+        ax.coords[0].set_ticklabel(size=15)
+        ax.coords[1].set_ticklabel(size=15)
+        ax.coords.grid(color='gray', alpha=0.5, linestyle='solid')
 
     if colorbar:
         plt.colorbar(im, ax = ax)
 
-    ax.grid(True, color='black', alpha=0.3, linestyle='--', linewidth=0.5)
-
     return fig, ax, im
 
-filepath = "D:\\Documents\\GitHub\\Yale_Astro330_LABS\\data\\lab2_data\\antenna_Rband.fits"
+if __name__ == "__main__":
+    filepath = "D:\\Documents\\GitHub\\Yale_Astro330_LABS\\data\\lab2_data\\antenna_Rband.fits"
 
-header, data = load_fits(filepath)
+    header, data = load_fits(filepath)
 
-print("\n=== 图像数据 ===")
-print(f"形状: {data.shape}")
-print(f"数据类型: {data.dtype}")
-print(f"像素值范围: [{np.min(data):.2f}, {np.max(data):.2f}]")
-print(f"数据形状: {data.shape}")
+    print("\n=== 图像数据 ===")
+    print(f"形状: {data.shape}")
+    print(f"数据类型: {data.dtype}")
+    print(f"像素值范围: [{np.min(data):.2f}, {np.max(data):.2f}]")
+    print(f"数据形状: {data.shape}")
 
-fig, ax, im = implot(image=data, figsize=(10, 10), cmap='gray_r', scale=0.5, header = header)
+    fig, ax, im = implot(image=data, figsize=(10, 10), cmap='gray_r', scale=0.5, header = header)
 
-plt.tight_layout()
-plt.show()
+    plt.tight_layout()
+    plt.show()
+
+
+
+## 问题 3：图像裁剪和孔径光度测量
+coord = SkyCoord('12:01:53.6 -18:53:11',unit=(u.hourangle,u.deg))
+cutout = Cutout2D(data, coord, size=(1*u.arcmin, 1*u.arcmin), wcs = WCS(header))
+implot(cutout.data, scale=2, wcs=cutout.wcs)
