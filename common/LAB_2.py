@@ -6,6 +6,7 @@ from astropy.wcs import WCS
 from astropy.nddata import Cutout2D
 from astropy.coordinates import SkyCoord
 import astropy.units as u
+import sep
 
 ## 问题 2： Data I/O
 def load_fits(filepath, extension = 0, *args):
@@ -125,8 +126,39 @@ if __name__ == "__main__":
     plt.show()
 
 
-
 ## 问题 3：图像裁剪和孔径光度测量
-coord = SkyCoord('12:01:53.6 -18:53:11',unit=(u.hourangle,u.deg))
+
+# coord = SkyCoord('12:01:53.6 -18:53:11',unit=(u.hourangle,u.deg))
+# cutout = Cutout2D(data, coord, size=(1*u.arcmin, 1*u.arcmin), wcs = WCS(header))
+
+coord = SkyCoord('12:01:55.0 -18:52:45',unit=(u.hourangle,u.deg))
 cutout = Cutout2D(data, coord, size=(1*u.arcmin, 1*u.arcmin), wcs = WCS(header))
-implot(cutout.data, scale=2, wcs=cutout.wcs)
+fig, ax, im = implot(cutout.data, scale=2, wcs=cutout.wcs)
+plt.tight_layout()
+plt.show()
+
+def run_sep(data):
+    '''
+    Sep wrapper... runs a basic set of sep commands on a given image
+    
+    Parameters
+    ----------
+    data: array_like
+        the input image
+    thresh_scale: float
+        a scaling parameter used by sep to determine when to call something a source (see sep documentation)
+        
+    Returns
+    -------
+    objects: numpy struct array
+        numpy structured array containing the sep-extracted object locations, etc. 
+    '''
+    # Background subtraction
+    data_sepuse = data.copy(order = 'C')
+    bkg = sep.Background(data_sepuse, bw=64, bh=64, fw=3, fh=3)
+    data_sub = data - bkg
+    # Object detection
+    objects = sep.extract(data_sub, 1.5, err=bkg.globalrms)
+    return objects
+objects = run_sep(cutout.data)
+len(objects)
