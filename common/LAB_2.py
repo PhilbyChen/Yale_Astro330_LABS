@@ -1,12 +1,14 @@
 from astropy.io import fits
 import os
 import matplotlib.pyplot as plt
+import pandas as pd
 import numpy as np
 from astropy.wcs import WCS
 from astropy.nddata import Cutout2D
 from astropy.coordinates import SkyCoord
 import astropy.units as u
 import sep
+
 
 ## 问题 2： Data I/O
 def load_fits(filepath, extension = 0, *args):
@@ -122,8 +124,8 @@ if __name__ == "__main__":
 
     fig, ax, im = implot(image=data, figsize=(10, 10), cmap='gray_r', scale=0.5, header = header)
 
-    plt.tight_layout()
-    plt.show()
+    # plt.tight_layout()
+    # plt.show()
 
 
 ## 问题 3：图像裁剪和孔径光度测量
@@ -134,8 +136,8 @@ if __name__ == "__main__":
 coord = SkyCoord('12:01:55.0 -18:52:45',unit=(u.hourangle,u.deg))
 cutout = Cutout2D(data, coord, size=(1*u.arcmin, 1*u.arcmin), wcs = WCS(header))
 fig, ax, im = implot(cutout.data, scale=2, wcs=cutout.wcs)
-plt.tight_layout()
-plt.show()
+# plt.tight_layout()
+# plt.show()
 
 def run_sep(data):
     '''
@@ -162,3 +164,33 @@ def run_sep(data):
     return objects
 objects = run_sep(cutout.data)
 len(objects)
+
+fig, ax, im= implot(cutout.data,scale=2,vmin=10,wcs=cutout.wcs)
+ax.plot(objects['x'],objects['y'],'o',ms=15,color='None',mec='r')
+plt.tight_layout()
+plt.show()
+
+'''虽然 sep 可以自己执行光圈光度测量（阅读文档，您可以看到输入对象和像素半径非常简单），
+但我们对事情会更加小心。为了更好地可视化和处理这些数据，我希望它是一个 pandas DataFrame 。我们将在本课程中使用这些对象。
+将 numpy 线性数组转换为数据帧'''
+df = pd.DataFrame(objects)
+print(df)
+
+# plt.figure()
+# plt.plot(df.flux,'.')
+# # plt.show()
+
+'''编写一个名为 remove_outliers 的函数，读取一个数据框和一个 flux-min 和 flux-max。
+它应该过滤数据框，只包含输入值之间的通量，并返回新的数据框。
+然后使用这个函数对你的数据进行处理，选择一个合适的截止值。'''
+def remove_outliers(df, flux_min, flux_max):
+    fixed_df = df[(df['flux'] >= flux_min) & (df['flux'] <= flux_max)]
+    return fixed_df
+df2 = remove_outliers(df, 0, 10000)
+
+plt.figure()
+plt.plot(df2.flux,'.')
+plt.show()
+
+fig, ax, im = implot(cutout.data,scale=2,vmin=10,wcs=cutout.wcs)
+ax.plot(df2['x'],df2['y'],'o',ms=15,color='None',mec='r')
