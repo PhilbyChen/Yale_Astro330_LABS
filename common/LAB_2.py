@@ -8,7 +8,8 @@ from astropy.nddata import Cutout2D
 from astropy.coordinates import SkyCoord
 import astropy.units as u
 import sep
-
+from photutils.aperture import SkyRectangularAperture
+from photutils.aperture import aperture_photometry
 
 ## 问题 2： Data I/O
 def load_fits(filepath, extension = 0, *args):
@@ -111,21 +112,21 @@ def implot(image, figsize=(9, 9), cmap ='gray_r', scale = 0.5,
 
     return fig, ax, im
 
-if __name__ == "__main__":
-    filepath = "D:\\Documents\\GitHub\\Yale_Astro330_LABS\\data\\lab2_data\\antenna_Rband.fits"
 
-    header, data = load_fits(filepath)
+filepath = "D:\\Documents\\GitHub\\Yale_Astro330_LABS\\data\\lab2_data\\antenna_Rband.fits"
 
-    print("\n=== 图像数据 ===")
-    print(f"形状: {data.shape}")
-    print(f"数据类型: {data.dtype}")
-    print(f"像素值范围: [{np.min(data):.2f}, {np.max(data):.2f}]")
-    print(f"数据形状: {data.shape}")
+header, data = load_fits(filepath)
 
-    fig, ax, im = implot(image=data, figsize=(10, 10), cmap='gray_r', scale=0.5, header = header)
+print("\n=== 图像数据 ===")
+print(f"形状: {data.shape}")
+print(f"数据类型: {data.dtype}")
+print(f"像素值范围: [{np.min(data):.2f}, {np.max(data):.2f}]")
+print(f"数据形状: {data.shape}")
 
-    # plt.tight_layout()
-    # plt.show()
+fig, ax, im = implot(image=data, figsize=(10, 10), cmap='gray_r', scale=0.5, header = header)
+
+plt.tight_layout()
+plt.show()
 
 
 ## 问题 3：图像裁剪和孔径光度测量
@@ -176,14 +177,18 @@ plt.show()
 df = pd.DataFrame(objects)
 print(df)
 
-# plt.figure()
-# plt.plot(df.flux,'.')
-# # plt.show()
+plt.figure()
+plt.plot(df.flux,'.')
+# plt.show()
 
-'''编写一个名为 remove_outliers 的函数，读取一个数据框和一个 flux-min 和 flux-max。
-它应该过滤数据框，只包含输入值之间的通量，并返回新的数据框。
-然后使用这个函数对你的数据进行处理，选择一个合适的截止值。'''
+
 def remove_outliers(df, flux_min, flux_max):
+    '''
+    编写一个名为 remove_outliers 的函数，
+    读取一个数据框和一个 flux-min 和 flux-max。
+    它应该过滤数据框，只包含输入值之间的通量，并返回新的数据框。
+    然后使用这个函数对你的数据进行处理，选择一个合适的截止值。
+    '''
     fixed_df = df[(df['flux'] >= flux_min) & (df['flux'] <= flux_max)]
     return fixed_df
 df2 = remove_outliers(df, 0, 10000)
@@ -194,3 +199,27 @@ plt.show()
 
 fig, ax, im = implot(cutout.data,scale=2,vmin=10,wcs=cutout.wcs)
 ax.plot(df2['x'],df2['y'],'o',ms=15,color='None',mec='r')
+
+# Continuum Subtraction 连续谱减除
+header_Halpha, data_Halpha = load_fits("D:\\Documents\\GitHub\\Yale_Astro330_LABS\data\\lab2_data\\antenna_Haband.fits")
+header_copy2 = header.copy()
+header_copy2 = strip_SIP(header_copy2)
+cutout_Halpha = Cutout2D(data_Halpha, coord, size=(1*u.arcmin, 1*u.arcmin), wcs = WCS(header_Halpha))
+
+fig, ax, im = implot(cutout_Halpha.data,scale=2,vmin=10,wcs=cutout_Halpha.wcs)
+ax.plot(df2['x'],df2['y'],'o',ms=15,color='None',mec='r')
+ax.contour(cutout_Halpha.data,levels=np.logspace(1.8,4,20),colors='r',alpha=0.5)
+ax.set_title("Continuum Subtraction", fontsize=14)
+plt.show()
+
+'''我们现在必须尝试对数据进行连续体减法。我们不能简单地从 Hα
+ 波段中减去 R
+ 波段，因为 R
+ 波段滤镜的通带更宽，因此在相似的曝光时间内，收集的光子比更窄的 Hα
+ 滤镜要多得多。理想情况下，可以使用一组前景恒星（在两张图像中都是纯连续体源）来测量两者的通量，并找到一个缩放常数。
+ 在这里，我们看到图像中的所有源很可能实际上是 HII 区。这意味着如果我们用它们来缩放图像之间，我们可能会过度减去真实通量。
+ 相反，我要在这里做的是（这可能有点粗糙），选择一个没有 Hα等值线的连续体发射的“空白”区域，并断言这个区域在两张图像中必须具有相同的通量。
+ 在上面的图中，我在天空中标记了一个蓝色矩形区域, 这就是我们将用来测量连续体到窄带比率的东西。
+
+ 为了制作这个区域，我们将使用 SkyRectangularAperture ，来自 photutils 。如果你没有它，可以在你的 a330 环境中使用 pip install photutils 。
+ '''
