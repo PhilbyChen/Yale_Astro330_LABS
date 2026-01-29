@@ -230,6 +230,7 @@ Ha_flux = aperture_photometry(cutout_Halpha.data, aper, error=None, mask=None, m
 fluxratio = R_flux / Ha_flux
 print(fluxratio)
 
+
 '''
 Now, fill in the function below, which should read in your rectangular patch, the R
  band cutout object, and the Hα
@@ -238,3 +239,28 @@ Now, fill in the function below, which should read in your rectangular patch, th
  image. The function should return this new image array.
  Plot up your continuum subtracted image using your implot() function, adding back in the apertures we found earlier and the contours we made from the full Hα image.
 '''
+def continuum_subtract(aper,Rcutout,Hacutout):
+    R_flux = aperture_photometry(cutout.data, aper, error=None, mask=None, method='exact', subpixels=5, wcs=cutout.wcs)['aperture_sum'][0]
+    Ha_flux = aperture_photometry(cutout_Halpha.data, aper, error=None, mask=None, method='exact', subpixels=5, wcs=cutout_Halpha.wcs)['aperture_sum'][0]
+    fluxratio = R_flux / Ha_flux
+    scaled_R = cutout.data / fluxratio
+    continuum_subtracted = cutout_Halpha.data - scaled_R
+    return continuum_subtracted
+
+sub_data = continuum_subtract(aper,cutout,cutout_Halpha)
+
+fig, ax, im = implot(sub_data,scale=0.9,wcs=cutout.wcs)
+ax.contour(cutout_Halpha.data,levels=np.logspace(1.8,4,10),colors='r',alpha=0.5,transform=ax.get_transform(cutout_Halpha.wcs))
+ax.plot(df2['x'],df2['y'],'o',ms=15,color='None',mec='w')
+plt.show()
+'''
+关于孔径分布与 Hα 气体分布的关联性，你有什么观察？ R 波段源与气体之间是否存在明显的对齐关系？这暗示了大多数 R 波段源是什么情况？
+# 部分区域比较重合，有少数离散点不重合。
+# 以下是AI分析：
+    Hα发射（恒星形成区）通常集中在星系的旋臂、核球交界处、星系相互作用区域
+    R波段源（主要是恒星连续谱）分布更广泛，包括年老恒星、背景星系
+
+    强关联区域：Hα等值线与部分R波段源精确重合 → 这些是活跃的恒星形成区
+    弱关联区域：有Hα发射但R波段源较弱 → 可能是低质量恒星形成区
+    无关联区域：R波段源没有Hα发射 → 可能是年老星团、背景星系
+ '''
