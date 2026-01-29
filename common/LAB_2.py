@@ -223,3 +223,18 @@ plt.show()
 
  为了制作这个区域，我们将使用 SkyRectangularAperture ，来自 photutils 。如果你没有它，可以在你的 a330 环境中使用 pip install photutils 。
  '''
+patch_cent = SkyCoord('12:01:53.7 -18:52:52',unit=(u.hourangle,u.deg))  # 孔径中心的天文坐标。这可以是标量坐标或坐标数组。
+aper = SkyRectangularAperture(patch_cent, 0.27*u.arcsec, 0.2*u.arcsec)
+R_flux = aperture_photometry(cutout.data, aper, error=None, mask=None, method='exact', subpixels=5, wcs=cutout.wcs)['aperture_sum'][0]
+Ha_flux = aperture_photometry(cutout_Halpha.data, aper, error=None, mask=None, method='exact', subpixels=5, wcs=cutout_Halpha.wcs)['aperture_sum'][0]
+fluxratio = R_flux / Ha_flux
+print(fluxratio)
+
+'''
+Now, fill in the function below, which should read in your rectangular patch, the R
+ band cutout object, and the Hα
+ cutout object. Within the function, copy in the code that determines the ratio, and then use the ratio you found to scale your R
+ band image, then subtract it from the Hα
+ image. The function should return this new image array.
+ Plot up your continuum subtracted image using your implot() function, adding back in the apertures we found earlier and the contours we made from the full Hα image.
+'''
