@@ -246,7 +246,6 @@ def continuum_subtract(aper,Rcutout,Hacutout):
     scaled_R = cutout.data / fluxratio
     continuum_subtracted = cutout_Halpha.data - scaled_R
     return continuum_subtracted
-
 sub_data = continuum_subtract(aper,cutout,cutout_Halpha)
 
 fig, ax, im = implot(sub_data,scale=0.9,wcs=cutout.wcs)
@@ -263,4 +262,24 @@ plt.show()
     强关联区域：Hα等值线与部分R波段源精确重合 → 这些是活跃的恒星形成区
     弱关联区域：有Hα发射但R波段源较弱 → 可能是低质量恒星形成区
     无关联区域：R波段源没有Hα发射 → 可能是年老星团、背景星系
+ '''
+
+
+'''
+Lastly, let’s load up the B
+ band image. As you probably know, the Bband traces bluer light, and thus will more preferentially see young, 
+ hot stars (whereas the R band traces the main sequence and turn off stellar distribution).
+ Load up the antenna_Bband.fits image, make a cutout, and plot it below. 
+ Make a new set of countours from your continuum subtracted Hα data, and overplot that onto the B band data. 
+ What do you see?
+'''
+header_B, data_B = load_fits("D:\\Documents\\GitHub\\Yale_Astro330_LABS\data\\lab2_data\\antenna_Bband.fits")
+cutout_B = Cutout2D(data_B,coord,size=(1*u.arcmin,1*u.arcmin),wcs=WCS(header_B))
+fig, ax = implot(cutout_B.data,scale=1.5,vmin=10,wcs=cutout_B.wcs)
+ax.contour(sub_data,levels=np.logspace(1.3,4,10),colors='r',alpha=0.5,transform=ax.get_transform(cutout_Halpha.wcs))
+'''
+在我的图像中，有一些 B
+ 波段的通量团与 Hα
+ 等高线很好地对齐，还有一些单独的 B 波段源。它们之间存在对应关系并不令人意外； B 光的过量意味着存在年轻的 O/B 星的紫外辐射。
+ 正是这种辐射电离了在 Hα 中发光的气体，因此 Hα 发射的气体应该松散地聚集在 B 波段亮度高的源周围（如果使用 GALEX FUV 数据，实验会更为清晰）。
  '''
