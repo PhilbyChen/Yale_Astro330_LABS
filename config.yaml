@@ -1,0 +1,58 @@
+# configs/common.yaml
+project:
+  name: "Yale Astro330 Laboratory Course"
+  student: "[Your Name]"
+  student_id: "[Your ID]"
+  email: "[Your Email]"
+
+paths:
+  base: "D:\\Documents\\GitHub\\Yale_Astro330_LABS"
+  # 其他路径会自动计算
+
+environment:
+  python_path: "python"
+  default_units: "arcmin"
+  plot_style: "seaborn-v0_8-darkgrid"
+
+file_formats:
+  data: "fits"
+  output: "png"
+  config: "yaml"
+
+
+
+
+# configs/lab2.yaml
+lab:
+  number: 2
+  name: "Astronomical Imaging I"
+  description: "Multi-band analysis of Antennae Galaxies"
+  data_subdirectory: "lab2_data"
+
+data_files:
+  r_band: "antenna_Rband.fits"
+  h_alpha: "antenna_Haband.fits"
+  b_band: "antenna_Bband.fits"
+
+coordinates:
+  # 主要分析区域
+  main:
+    center: "12:01:55.0 -18:52:45"
+    size: 1.0  # arcmin
+  
+  # 连续谱测量区域
+  continuum:
+    center: "12:01:53.7 -18:52:52"
+    width: 0.27  # arcsec
+    height: 0.2  # arcsec
+
+analysis:
+  sep_threshold: 1.5
+  flux_min: 0
+  flux_max: 10000
+  contour_levels: [1.8, 4, 20]  # min, max, num_levels
+
+output:
+  save_plots: true
+  plot_dpi: 150
+  results_dir: "results/lab2"
