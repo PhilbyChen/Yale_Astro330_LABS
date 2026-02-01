@@ -57,6 +57,14 @@ def load_fits(filepath, extension = 0, *args):
         hdu = hdul[extension]
         return hdu.header.copy(), hdu.data
 
+def strip_SIP(header):
+    A_prefixes = [i for i in header.keys() if i.startswith('A_')]
+    B_prefixes = [i for i in header.keys() if i.startswith('B_')]
+    for a,b in zip(A_prefixes,B_prefixes):
+        del header[a]
+        del header[b]
+    return header
+
 def implot(image, figsize=(9, 9), cmap ='gray_r', scale = 0.5, 
            colorbar = False, header = None, wcs = None, 
            **kwargs):
@@ -135,8 +143,8 @@ plt.show()
 class PSFPhot():
     def __init__(self, data_fpath, dark_path, flat_path):
         self.header, self.data_init = load_fits(data_fpath)
-        dark_corrected = self.dark_subtract(self.data_init, dark_path)
-        self.data_calibrated = self.flat_field(dark_corrected, flat_path)
+        # 校准图像
+        self.data_calibrated = self.flat_field(self.dark_subtract(self.data_init,dark_path),flat_path)
         self.plot_both()
 
     ''' 暗场扣除 去掉探测器自身的热噪声 '''
@@ -149,16 +157,32 @@ class PSFPhot():
         _, flat_im = load_fits(flat_path)
         return image / (flat_im / np.max(flat_im))
     
-    def plot_both(self):
-        # 原始图像
-        implot(self.data_init, header=self.header)
-        plt.title("original image")
-        plt.show()
+    # def plot_both(self):
+    #     # 原始图像
+    #     implot(self.data_init, header=self.header)
+    #     plt.title("original image")
+    #     plt.show()
         
-        # 校准后图像
-        implot(self.data_calibrated, header=self.header)
-        plt.title("Calibrated image")
-        plt.show()
+    #     # 校准后图像
+    #     implot(self.data_calibrated, header=self.header)
+    #     plt.title("Calibrated image")
+    #     plt.show()
+
+    def subtract_background(self,mask=None):
+        data_copy = self.data_calibrated.copy(oeder = 'C')
+        bkg = sep.Background(data_copy, mask=mask)
+        self.background = bkg.back()
+        self.image = self.data_colibrated - self.background
+        print("Background estimated; output saved to attribute 'image' ")
+        return self.image
+    
+    '''
+     我们的目标是估计上述图像的点扩散函数（PSF），然后测量这里恒星和星系的通量，同时考虑 PSF。
+     要开始这个过程，我们需要在这张图像中定位星星。上次我们看到如何使用 sep 分割图像，但在本次实验中我们将自己执行这个步骤，使用两种方法。
+    '''
+
+
+
 
 base_path = r"D:\\Documents\\GitHub\\Yale_Astro330_LABS\\data\\lab3_data"
 PSFPhot(
