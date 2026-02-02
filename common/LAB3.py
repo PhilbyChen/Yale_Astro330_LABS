@@ -140,12 +140,16 @@ ax.set_title("M81/M82 Field - Dragonfly Telephoto Array")
 plt.show()
 
 
+
 class PSFPhot():
     def __init__(self, data_fpath, dark_path, flat_path):
         self.header, self.data_init = load_fits(data_fpath)
         # 校准图像
-        self.data_calibrated = self.flat_field(self.dark_subtract(self.data_init,dark_path),flat_path)
-        self.plot_both()
+        self.data_calibrated = self.flat_field(
+            self.dark_subtract(self.data_init,dark_path),flat_path
+            )
+        self.image = None  
+        self.background = None
 
     ''' 暗场扣除 去掉探测器自身的热噪声 '''
     def dark_subtract(self, image, dark_path):
@@ -156,37 +160,121 @@ class PSFPhot():
     def flat_field(self, image, flat_path):
         _, flat_im = load_fits(flat_path)
         return image / (flat_im / np.max(flat_im))
-    
-    # def plot_both(self):
-    #     # 原始图像
-    #     implot(self.data_init, header=self.header)
-    #     plt.title("original image")
-    #     plt.show()
-        
-    #     # 校准后图像
-    #     implot(self.data_calibrated, header=self.header)
-    #     plt.title("Calibrated image")
-    #     plt.show()
 
     def subtract_background(self,mask=None):
-        data_copy = self.data_calibrated.copy(oeder = 'C')
+        data_copy = self.data_calibrated.copy(order = 'C')
         bkg = sep.Background(data_copy, mask=mask)
         self.background = bkg.back()
-        self.image = self.data_colibrated - self.background
+        self.image = self.data_calibrated - self.background
         print("Background estimated; output saved to attribute 'image' ")
-        return self.image
+        return self
     
     '''
      我们的目标是估计上述图像的点扩散函数（PSF），然后测量这里恒星和星系的通量，同时考虑 PSF。
      要开始这个过程，我们需要在这张图像中定位星星。上次我们看到如何使用 sep 分割图像，但在本次实验中我们将自己执行这个步骤，使用两种方法。
     '''
+    def set_image_mask(self,mask):
+        if hasattr(self,'image'):
+            self.image = np.ma.masked_array(self.image,mask=mask)
+        else:
+            self.image = np.ma.masked_array(self.data_calibrated,mask=mask)
+        return self
+    
+
+    def find_peak(self, image, threshold):
+        '''
+        通过遍历每个像素并检查其邻域来查找图像中的峰值，其中“峰值”被定义为比所有相邻像素（即 8 个周围像素）具有更高通量的区域。
+        为了不拾取随机噪声像素，还需要输入一个名为 threshold 的参数。
+        在你的算法中，不要返回任何像素值低于此阈值的“峰值”像素
+
+        Algorithm for finding peaks (above a threshold) in an image
+    
+        Parameters
+        ----------
+        image: array_like
+            2D array containing the image of interest.
+        threshold: float
+            minimum pixel value for inclusion in search
+    
+        Returns
+        -------
+        peak_x_values, peak_y_values: array_like, array_like
+            arrays containing the x and y coordinates of peak regions.
+        '''
+
+        peaks = []
+        data = self.image.data if hasattr(self.image, 'mask') else self.image
+
+        for y in range(1, data.shape[0] - 1):       # 跳过边界值，没有完整的八个邻居
+            for x in range(1, data.shape[0] - 1):       # shape[0] = 3 （行数/高度）
+                                                        # shape[1] = 4 （列数/宽度）
+                center = data[y, x]             # 取图像中第y行、第x列的像素值
+
+                if center <= threshold:
+                    continue
+
+                # 邻居结构
+                # [y-1, x-1] [y-1, x] [y-1, x+1]
+                # [y,   x-1] [y,   x] [y,   x+1]   中心[y,x]
+                # [y+1, x-1] [y+1, x] [y+1, x+1]
+                if (center > data[y-1, x-1] and 
+                    center > data[y-1, x] and 
+                    center > data[y-1, x+1] and
+                    center > data[y, x-1] and 
+                    center > data[y, x+1] and
+                    center > data[y+1, x-1] and 
+                    center > data[y+1, x] and 
+                    center > data[y+1, x+1]):
+                    peaks.append((y, x))
+        return peaks
+        
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
 
 base_path = r"D:\\Documents\\GitHub\\Yale_Astro330_LABS\\data\\lab3_data"
-PSFPhot(
+
+pipe = PSFPhot(
     f"{base_path}/2020-04-15-0001.fits",
     f"{base_path}/2020-04-15-dark.fits",
     f"{base_path}/2020-04-15-flat.fits"
 )
+
+mask = np.zeros_like(pipe.data_calibrated, dtype=bool)
+mask[900:1250,0:300] = True
+mask[850:1200,900:1100] = True
+
+pipe.subtract_background(mask=mask)
+pipe.set_image_mask(mask)
+
+implot(pipe.image)
+implot(pipe.background,colorbar=True)
+plt.show()
