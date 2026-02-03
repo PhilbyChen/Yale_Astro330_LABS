@@ -29,8 +29,7 @@ import sep
 from photutils.aperture import SkyRectangularAperture
 from photutils.aperture import aperture_photometry
 import os
-
-
+from scipy.ndimage import maximum_filter
 
 sys.path.append(r"D:\\Documents\\GitHub\\Yale_Astro330_LABS")
 
@@ -173,7 +172,7 @@ class PSFPhot():
      我们的目标是估计上述图像的点扩散函数（PSF），然后测量这里恒星和星系的通量，同时考虑 PSF。
      要开始这个过程，我们需要在这张图像中定位星星。上次我们看到如何使用 sep 分割图像，但在本次实验中我们将自己执行这个步骤，使用两种方法。
     '''
-    def set_image_mask(self,mask):
+    def set_image_mask(self, mask):
         if hasattr(self,'image'):
             self.image = np.ma.masked_array(self.image,mask=mask)
         else:
@@ -181,75 +180,77 @@ class PSFPhot():
         return self
     
 
-    def find_peak(self, image, threshold):
-        '''
-        通过遍历每个像素并检查其邻域来查找图像中的峰值，其中“峰值”被定义为比所有相邻像素（即 8 个周围像素）具有更高通量的区域。
-        为了不拾取随机噪声像素，还需要输入一个名为 threshold 的参数。
-        在你的算法中，不要返回任何像素值低于此阈值的“峰值”像素
+    # def find_peak(self, image, threshold):
+    #     '''
+    #     通过遍历每个像素并检查其邻域来查找图像中的峰值，其中“峰值”被定义为比所有相邻像素（即 8 个周围像素）具有更高通量的区域。
+    #     为了不拾取随机噪声像素，还需要输入一个名为 threshold 的参数。
+    #     在你的算法中，不要返回任何像素值低于此阈值的“峰值”像素
 
-        Algorithm for finding peaks (above a threshold) in an image
+    #     Algorithm for finding peaks (above a threshold) in an image
     
-        Parameters
-        ----------
-        image: array_like
-            2D array containing the image of interest.
-        threshold: float
-            minimum pixel value for inclusion in search
+    #     Parameters
+    #     ----------
+    #     image: array_like
+    #         2D array containing the image of interest.
+    #     threshold: float
+    #         minimum pixel value for inclusion in search
     
-        Returns
-        -------
-        peak_x_values, peak_y_values: array_like, array_like
-            arrays containing the x and y coordinates of peak regions.
-        '''
+    #     Returns
+    #     -------
+    #     peak_x_values, peak_y_values: array_like, array_like
+    #         arrays containing the x and y coordinates of peak regions.
+    #     '''
 
-        peaks = []
+    #     peaks = []
+    #     data = self.image.data if hasattr(self.image, 'mask') else self.image
+
+    #     for y in range(1, data.shape[0] - 1):       # 跳过边界值，没有完整的八个邻居
+    #         for x in range(1, data.shape[0] - 1):       # shape[0] = 3 （行数/高度）
+    #                                                     # shape[1] = 4 （列数/宽度）
+    #             center = data[y, x]             # 取图像中第y行、第x列的像素值
+
+    #             if center <= threshold:
+    #                 continue
+
+    #             # 邻居结构
+    #             # [y-1, x-1] [y-1, x] [y-1, x+1]
+    #             # [y,   x-1] [y,   x] [y,   x+1]   中心[y,x]
+    #             # [y+1, x-1] [y+1, x] [y+1, x+1]
+    #             if (center > data[y-1, x-1] and 
+    #                 center > data[y-1, x] and 
+    #                 center > data[y-1, x+1] and
+    #                 center > data[y, x-1] and 
+    #                 center > data[y, x+1] and
+    #                 center > data[y+1, x-1] and 
+    #                 center > data[y+1, x] and 
+    #                 center > data[y+1, x+1]):
+    #                 peaks.append((y, x))
+    #     return peaks
+
+    def findpeaks_maxfilter(self, threshold=0):
+        '''
+         有几种解决方案，通常涉及过滤图像或使用模板与图像进行交叉相关。这里有一个这样的解决方案。
+        '''
+        neighborhood = np.ones((3,3),dtype=bool)                    # just 3x3 True, defining the neighborhood over which to filter
+        # find local maximum for each pixel
+        amax = maximum_filter(self.image, footprint=neighborhood)       #max filter will set each 9-square region in the image to the max in that region.
+    
+        peaks = np.where((self.image == amax) & (self.image >= threshold))    #find the pixels unaffected by the max filter.
+        peaks = np.array([peaks[0],peaks[1]]).T
+     
+        outpeaks = []
         data = self.image.data if hasattr(self.image, 'mask') else self.image
-
-        for y in range(1, data.shape[0] - 1):       # 跳过边界值，没有完整的八个邻居
-            for x in range(1, data.shape[0] - 1):       # shape[0] = 3 （行数/高度）
-                                                        # shape[1] = 4 （列数/宽度）
-                center = data[y, x]             # 取图像中第y行、第x列的像素值
-
-                if center <= threshold:
-                    continue
-
-                # 邻居结构
-                # [y-1, x-1] [y-1, x] [y-1, x+1]
-                # [y,   x-1] [y,   x] [y,   x+1]   中心[y,x]
-                # [y+1, x-1] [y+1, x] [y+1, x+1]
-                if (center > data[y-1, x-1] and 
-                    center > data[y-1, x] and 
-                    center > data[y-1, x+1] and
-                    center > data[y, x-1] and 
-                    center > data[y, x+1] and
-                    center > data[y+1, x-1] and 
-                    center > data[y+1, x] and 
-                    center > data[y+1, x+1]):
-                    peaks.append((y, x))
-        return peaks
+        for y in range(1, data.shape[0]-1):
+            for x in range(1, data.shape[1]-1):
+                center = data[y, x]
+                if center > threshold and center == data[y-1:y+2, x-1:x+2].max():
+                    if np.sum(data[y-1:y+2, x-1:x+2] > center*0.5) >= 4:
+                        outpeaks.append([y, x])
+        return np.array(outpeaks)
+    
         
         
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        
 
 
 
@@ -272,8 +273,13 @@ mask = np.zeros_like(pipe.data_calibrated, dtype=bool)
 mask[900:1250,0:300] = True
 mask[850:1200,900:1100] = True
 
-pipe.subtract_background(mask=mask)
+pipe.subtract_background(mask)
 pipe.set_image_mask(mask)
+peaks = pipe.findpeaks_maxfilter(threshold=np.mean(pipe.image)+3*np.std(pipe.image))
+# Note that this is returned in row, column form (so y,x).
+fig, ax, im = implot(pipe.image,scale=0.5)
+ax.plot(peaks[:,1],peaks[:,0],'o',color='None',mec='r',ms=10,alpha=0.8);
+
 
 implot(pipe.image)
 implot(pipe.background,colorbar=True)
