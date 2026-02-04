@@ -30,6 +30,10 @@ from photutils.aperture import SkyRectangularAperture
 from photutils.aperture import aperture_photometry
 import os
 from scipy.ndimage import maximum_filter
+from astropy.modeling.functional_models import Gaussian2D
+
+
+
 
 sys.path.append(r"D:\\Documents\\GitHub\\Yale_Astro330_LABS")
 
@@ -259,10 +263,16 @@ class PSFPhot():
         5. 返回(cx, cy)
         '''
         half = windowsize // 2
+            
+        assert peak_x - half >= 0, f"x={peak_x} 太靠左，需要窗口{half}像素"
+        assert peak_x + half < image.shape[1], f"x={peak_x} 太靠右，需要窗口{half}像素"
+        assert peak_y - half >= 0, f"y={peak_y} 太靠上，需要窗口{half}像素"
+        assert peak_y + half < image.shape[0], f"太靠下，需要窗口{half}像素"
+
         y_min = peak_y - half
-        y_max = peak_y + half + 1
+        y_max = peak_y + half 
         x_min = peak_x - half
-        x_max = peak_x + half + 1
+        x_max = peak_x + half 
         windowlumi = self.image[y_min:y_max, x_min:x_max]
         rows, cols = np.mgrid[y_min:y_max, x_min:x_max]
 
@@ -271,7 +281,6 @@ class PSFPhot():
         centroid_x = np.sum(cols * windowlumi) / total_weight
         return centroid_x, centroid_y
         
-
 
 
 
@@ -300,7 +309,52 @@ peaks = pipe.findpeaks_maxfilter(threshold=np.mean(pipe.image)+3*np.std(pipe.ima
 fig, ax, im = implot(pipe.image,scale=0.5)
 ax.plot(peaks[:,1],peaks[:,0],'o',color='None',mec='r',ms=10,alpha=0.8);
 
-
 implot(pipe.image)
 implot(pipe.background,colorbar=True)
 plt.show()
+
+
+'''查找峰值并计算质心'''
+threshold = np.mean(pipe.image) + 3 * np.std(pipe.image)
+peaks = pipe.findpeaks_maxfilter(threshold=threshold)
+all_cen = []
+for i in range(len(peaks)):
+    try:
+        y = peaks[i][0]
+        x = peaks[i][1]
+        cx, cy = pipe.centroid_cutout(pipe.image, x, y, windowsize=11) 
+        all_cen.append([cx,cy])
+    except AssertionError:
+        continue
+all_cen = np.array(all_cen)
+
+'''去除重复质心'''
+out_cen = []
+for i in range(len(all_cen)):
+    # sub2 = (所有质心 - 当前质心)²
+    sub2 = (all_cen - all_cen[i])**2
+    sq = np.sum(sub2,axis=1)
+    # sqt = √((Δx)² + (Δy)²) = 欧几里得距离
+    sqt = np.sqrt(sq)
+    # 找出距离小于20像素的质心
+    ind, = np.where(sqt<20)
+    # 如果只有自己（len(ind) == 1）或没有其他点太近, 保留这个质心
+    if len(ind) < 2:
+        out_cen.append(all_cen[i])
+out_cen = np.array(out_cen)
+
+fig, ax, im = implot(pipe.image,scale=0.5)
+ax.plot(out_cen[:,0],out_cen[:,1],'o',color='None',mec='r',ms=10)
+plt.tight_layout()
+plt.show()
+
+
+
+def eval_gauss(x_arr,y_arr,sigma_x,sigma_y,mu_x,mu_y):
+    
+    g = Gaussian2D.evaluate(x=x_arr,y=y_arr,amplitude=1,theta=0,x_mean=mu_x,
+                   y_mean=mu_y,
+                   x_stddev=sigma_x,
+                   y_stddev=sigma_y)
+    g/=np.sum(g)
+    return g
