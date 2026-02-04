@@ -43,7 +43,6 @@ def strip_SIP(header):
         del header[b]
     return header
 
-
 def implot(image, figsize=(9, 9), cmap ='gray_r', scale = 0.5, 
            colorbar = False, header = None, wcs = None, 
            **kwargs):

@@ -24,7 +24,6 @@ import pandas as pd
 import numpy as np
 from astropy.wcs import WCS
 import sep
-from scipy.ndimage import maximum_filter
 from astropy.modeling.functional_models import Gaussian2D
 
 
@@ -349,10 +348,8 @@ class PSFPhot():
         """
         # 用图像
         img = self.image if background_subtract else self.data_calibrated
-        
         # 找峰值
         peaks = self.findpeaks_maxfilter(threshold=threshold or np.mean(img)+3*np.std(img))
-        
         # 算质心
         centroids = []
         for y, x in self.peaks:
@@ -482,7 +479,6 @@ ax.plot(results['cutout_flux'], results['psf_flux'], 'o', alpha=0.5,
 
 ax.set_xscale('log')
 ax.set_yscale('log')
-
 ax.tick_params(which='both', direction='in', top=True, right=True, labelsize=16)
 ax.tick_params(which='major', length=10, width=2)
 ax.tick_params(which='minor', length=5, width=2)
