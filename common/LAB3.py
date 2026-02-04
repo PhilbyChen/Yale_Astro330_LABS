@@ -16,19 +16,14 @@
    Convolving with the PSF and extracting flux. 
    与点扩散函数卷积并提取通量。
 """
+import pandas as pd
 import sys
 from astropy.io import fits
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 from astropy.wcs import WCS
-from astropy.nddata import Cutout2D
-from astropy.coordinates import SkyCoord
-import astropy.units as u
 import sep
-from photutils.aperture import SkyRectangularAperture
-from photutils.aperture import aperture_photometry
-import os
 from scipy.ndimage import maximum_filter
 from astropy.modeling.functional_models import Gaussian2D
 
@@ -170,7 +165,6 @@ class PSFPhot():
         self.background = bkg.back()
         self.image = self.data_calibrated - self.background
         print("Background estimated; output saved to attribute 'image' ")
-        return self
     
     '''
      我们的目标是估计上述图像的点扩散函数（PSF），然后测量这里恒星和星系的通量，同时考虑 PSF。
@@ -229,63 +223,191 @@ class PSFPhot():
     #                 peaks.append((y, x))
     #     return peaks
 
-    def findpeaks_maxfilter(self, threshold=0, windowsize = 8):
-        '''
-         有几种解决方案，通常涉及过滤图像或使用模板与图像进行交叉相关。这里有一个这样的解决方案。
-        '''
-        neighborhood = np.ones((windowsize, windowsize), dtype=bool)                    # just 3x3 True, defining the neighborhood over which to filter
-        # find local maximum for each pixel
-        amax = maximum_filter(self.image, footprint=neighborhood)       #max filter will set each 9-square region in the image to the max in that region.
-    
-        peaks = np.where((self.image == amax) & (self.image >= threshold))    #find the pixels unaffected by the max filter.
-        peaks = np.array([peaks[0],peaks[1]]).T
-     
-        outpeaks = []
-        data = self.image.data if hasattr(self.image, 'mask') else self.image
-        for y in range(1, data.shape[0]-1):
-            for x in range(1, data.shape[1]-1):
-                center = data[y, x]
-                if center > threshold and center == data[y-1:y+2, x-1:x+2].max():
-                    if np.sum(data[y-1:y+2, x-1:x+2] > center*0.8) >= 4:
-                        outpeaks.append([y, x])
-        return np.array(outpeaks)
+    def findpeaks_maxfilter(self, threshold=None, image=None):
+        """
+        使用最大值滤波查找图像中的峰值
+        
+        参数:
+        threshold: 检测阈值
+        image: 要分析的图像（如果为None则使用self.image）
+        
+        返回:
+        峰值位置数组，同时保存到self.peaks属性
+        """
+        # 使用指定的图像或默认图像
+        if image is None:
+            image = self.image
+        # 设置默认阈值
+        if threshold is None:
+            threshold = np.mean(image) + 3 * np.std(image)
+        # 应用最大值滤波
+        from scipy.ndimage import maximum_filter
+        neighborhood_size = 5
+        data_max = maximum_filter(image, neighborhood_size)
+        # 找到局部最大值
+        maxima = (image == data_max)
+        # 应用阈值
+        maxima[image < threshold] = 0
+        # 获取峰值坐标
+        peaks_y, peaks_x = np.where(maxima)
+        # 保存到类属性（作为(y,x)坐标对）
+        self.peaks = np.column_stack((peaks_y, peaks_x))
+        
+        print(f"找到 {len(self.peaks)} 个峰值，已保存到 self.peaks")
+        
+        return self.peaks
     
 
     '''我们现在有一个函数可以返回给定图像中的峰值（星星）。我们的下一步将是使用它们的质心来估计这些峰值（星星）的确切中心。'''
     def centroid_cutout(self, image, peak_x, peak_y, windowsize=11):
         '''
-        1. 接收一个星星位置 (x,y)
-        2. 以(x,y)为中心，切N×N的小方块
-        3. 计算小方块里每个像素的"权重"（亮度）
-        4. 用加权平均公式：
-        cx = Σ(每个像素的x坐标 × 像素亮度) ÷ Σ(所有像素亮度)
-        cy = Σ(每个像素的y坐标 × 像素亮度) ÷ Σ(所有像素亮度)
-        5. 返回(cx, cy)
+        计算质心并保存到类属性
         '''
         half = windowsize // 2
-            
-        assert peak_x - half >= 0, f"x={peak_x} 太靠左，需要窗口{half}像素"
-        assert peak_x + half < image.shape[1], f"x={peak_x} 太靠右，需要窗口{half}像素"
-        assert peak_y - half >= 0, f"y={peak_y} 太靠上，需要窗口{half}像素"
-        assert peak_y + half < image.shape[0], f"太靠下，需要窗口{half}像素"
-
-        y_min = peak_y - half
-        y_max = peak_y + half 
-        x_min = peak_x - half
-        x_max = peak_x + half 
-        windowlumi = self.image[y_min:y_max, x_min:x_max]
+        
+        # 处理边缘情况
+        y_min = max(0, peak_y - half)
+        y_max = min(image.shape[0], peak_y + half + 1)
+        x_min = max(0, peak_x - half)
+        x_max = min(image.shape[1], peak_x + half + 1)
+        
+        windowlumi = image[y_min:y_max, x_min:x_max]
+        
+        if windowlumi.size == 0:
+            return peak_x, peak_y
+        
         rows, cols = np.mgrid[y_min:y_max, x_min:x_max]
-
+        
         total_weight = np.sum(windowlumi)
+        
+        if total_weight <= 0:
+            return peak_x, peak_y
+        
         centroid_y = np.sum(rows * windowlumi) / total_weight
         centroid_x = np.sum(cols * windowlumi) / total_weight
-        return centroid_x, centroid_y
         
+        # 初始化或更新质心列表
+        if not hasattr(self, 'centroids'):
+            self.centroids = []
+        
+        self.centroids.append({
+            'peak_position': (peak_x, peak_y),
+            'centroid_position': (centroid_x, centroid_y),
+            'window_size': windowsize
+        })
+        
+        return centroid_x, centroid_y
+    
 
+    def eval_gauss(self, x_arr, y_arr, sigma_x, sigma_y, mu_x, mu_y):
+        g = Gaussian2D.evaluate(x=x_arr, y=y_arr, amplitude=1, theta=0,
+                            x_mean=mu_x, y_mean=mu_y,
+                            x_stddev=sigma_x, y_stddev=sigma_y)
+        # g /= np.sum(g)
+        return g
 
+    def second_moment(self, image_cutout, xx, yy, centroid_x, centroid_y):
+        '''计算二阶矩并保存结果到类属性'''
+        T = np.sum(image_cutout)
+        
+        if T <= 0:
+            return 1.0, 1.0
+        
+        T2x = np.sum(xx**2 * image_cutout)
+        T2y = np.sum(yy**2 * image_cutout)
+        
+        sigma_x = np.sqrt(T2x/T - centroid_x**2)
+        sigma_y = np.sqrt(T2y/T - centroid_y**2)
+        
+        # 处理可能的负值
+        sigma_x = max(0.5, sigma_x)
+        sigma_y = max(0.5, sigma_y)
+        
+        # 初始化或更新sigma列表
+        if not hasattr(self, 'sigma_values'):
+            self.sigma_values = []
+        
+        self.sigma_values.append({
+            'sigma_x': sigma_x,
+            'sigma_y': sigma_y,
+            'centroid_x': centroid_x,
+            'centroid_y': centroid_y
+        })
+        
+        return sigma_x, sigma_y
+    
 
-
-
+    '''
+      我们将保持质心和二阶矩函数不变，因为它们作用于单个恒星。相反，我们将编写一个新的最终方法，称为 psf_photometry 。
+      当用户运行这个方法时，它应该首先将峰值逐个输入质心代码，组装一组质心。然后，它应该围绕每个峰值（或质心）构造 self.image 的切割区域，
+      并将这些以及质心输入到二阶矩函数中，以保存每个恒星的一对 sigma_x 和 sigma_y。
+      最后，它应该使用我上面提供的 eval_gauss 函数来执行 PSF 测光。
+    '''
+    def psf_photometry(self, threshold=None, background_subtract=True):
+        """
+        最小化版PSF测光
+        """
+        # 用图像
+        img = self.image if background_subtract else self.data_calibrated
+        
+        # 找峰值
+        peaks = self.findpeaks_maxfilter(threshold=threshold or np.mean(img)+3*np.std(img))
+        
+        # 算质心
+        centroids = []
+        for y, x in self.peaks:
+            try:
+                cx, cy = self.centroid_cutout(img, x, y)
+                centroids.append([cx, cy])
+            except:
+                pass
+        
+        if not centroids:
+            return pd.DataFrame()
+        
+        centroids = np.array(centroids)
+        
+        # 去重
+        filtered = []
+        for i, p1 in enumerate(centroids):
+            if i == 0 or np.all(np.sqrt(np.sum((centroids[:i] - p1)**2, axis=1)) >= 5):
+                filtered.append(p1)
+        
+        # 测光
+        results = []
+        for cx, cy in filtered:
+            half = 10
+            y_min, y_max = max(0, int(cy)-half), min(img.shape[0], int(cy)+half+1)
+            x_min, x_max = max(0, int(cx)-half), min(img.shape[1], int(cx)+half+1)
+            
+            if (y_max-y_min) < 5 or (x_max-x_min) < 5:
+                continue
+            
+            cut = img[y_min:y_max, x_min:x_max]
+            yy, xx = np.indices(cut.shape)
+            
+            # 计算sigma
+            try:
+                sigma_x, sigma_y = self.second_moment(cut, xx, yy, cx-x_min, cy-y_min)
+                if sigma_x <= 0.1 or sigma_y <= 0.1:
+                    continue
+            except:
+                continue
+            
+            # PSF测光
+            try:
+                yy_abs, xx_abs = np.mgrid[y_min:y_max, x_min:x_max]
+                psf = self.eval_gauss(xx_abs, yy_abs, sigma_x, sigma_y, cx, cy)
+                flux_psf = np.sum(cut * psf)
+                results.append({
+                    'centroid_x': cx, 'centroid_y': cy,
+                    'sigma_x': sigma_x, 'sigma_y': sigma_y,
+                    'cutout_flux': cut.sum(), 'psf_flux': flux_psf
+                })
+            except:
+                pass
+        
+        return pd.DataFrame(results)
 
 
 
@@ -349,12 +471,26 @@ plt.tight_layout()
 plt.show()
 
 
+pipe.subtract_background(mask)
+results = pipe.psf_photometry(background_subtract=True)
+print(results)
 
-def eval_gauss(x_arr,y_arr,sigma_x,sigma_y,mu_x,mu_y):
-    
-    g = Gaussian2D.evaluate(x=x_arr,y=y_arr,amplitude=1,theta=0,x_mean=mu_x,
-                   y_mean=mu_y,
-                   x_stddev=sigma_x,
-                   y_stddev=sigma_y)
-    g/=np.sum(g)
-    return g
+fig, ax = plt.subplots(figsize=(7,7))
+ax.plot([6e4,1e7],[6e4,1e7],lw=3.5,color='C3',alpha=0.7,label='1:1 relation')
+ax.plot(results['cutout_flux'], results['psf_flux'], 'o', alpha=0.5, 
+        mec='k', ms=10, label='data')
+
+ax.set_xscale('log')
+ax.set_yscale('log')
+
+ax.tick_params(which='both', direction='in', top=True, right=True, labelsize=16)
+ax.tick_params(which='major', length=10, width=2)
+ax.tick_params(which='minor', length=5, width=2)
+
+for axis in ['top','bottom','left','right']:
+    ax.spines[axis].set_linewidth(2)
+
+ax.set_xlabel('Cutout Flux (square aperture)', fontsize=18)
+ax.set_ylabel('PSF Flux (gaussian model)', fontsize=18)
+
+plt.show()
