@@ -179,7 +179,6 @@ class PSFPhot():
             self.image = np.ma.masked_array(self.data_calibrated,mask=mask)
         return self
     
-
     # def find_peak(self, image, threshold):
     #     '''
     #     通过遍历每个像素并检查其邻域来查找图像中的峰值，其中“峰值”被定义为比所有相邻像素（即 8 个周围像素）具有更高通量的区域。
@@ -200,7 +199,6 @@ class PSFPhot():
     #     peak_x_values, peak_y_values: array_like, array_like
     #         arrays containing the x and y coordinates of peak regions.
     #     '''
-
     #     peaks = []
     #     data = self.image.data if hasattr(self.image, 'mask') else self.image
 
@@ -227,11 +225,11 @@ class PSFPhot():
     #                 peaks.append((y, x))
     #     return peaks
 
-    def findpeaks_maxfilter(self, threshold=0):
+    def findpeaks_maxfilter(self, threshold=0, windowsize = 8):
         '''
          有几种解决方案，通常涉及过滤图像或使用模板与图像进行交叉相关。这里有一个这样的解决方案。
         '''
-        neighborhood = np.ones((3,3),dtype=bool)                    # just 3x3 True, defining the neighborhood over which to filter
+        neighborhood = np.ones((windowsize, windowsize), dtype=bool)                    # just 3x3 True, defining the neighborhood over which to filter
         # find local maximum for each pixel
         amax = maximum_filter(self.image, footprint=neighborhood)       #max filter will set each 9-square region in the image to the max in that region.
     
@@ -244,12 +242,34 @@ class PSFPhot():
             for x in range(1, data.shape[1]-1):
                 center = data[y, x]
                 if center > threshold and center == data[y-1:y+2, x-1:x+2].max():
-                    if np.sum(data[y-1:y+2, x-1:x+2] > center*0.5) >= 4:
+                    if np.sum(data[y-1:y+2, x-1:x+2] > center*0.8) >= 4:
                         outpeaks.append([y, x])
         return np.array(outpeaks)
     
-        
-        
+
+    '''我们现在有一个函数可以返回给定图像中的峰值（星星）。我们的下一步将是使用它们的质心来估计这些峰值（星星）的确切中心。'''
+    def centroid_cutout(self, image, peak_x, peak_y, windowsize=11):
+        '''
+        1. 接收一个星星位置 (x,y)
+        2. 以(x,y)为中心，切N×N的小方块
+        3. 计算小方块里每个像素的"权重"（亮度）
+        4. 用加权平均公式：
+        cx = Σ(每个像素的x坐标 × 像素亮度) ÷ Σ(所有像素亮度)
+        cy = Σ(每个像素的y坐标 × 像素亮度) ÷ Σ(所有像素亮度)
+        5. 返回(cx, cy)
+        '''
+        half = windowsize // 2
+        y_min = peak_y - half
+        y_max = peak_y + half + 1
+        x_min = peak_x - half
+        x_max = peak_x + half + 1
+        windowlumi = self.image[y_min:y_max, x_min:x_max]
+        rows, cols = np.mgrid[y_min:y_max, x_min:x_max]
+
+        total_weight = np.sum(windowlumi)
+        centroid_y = np.sum(rows * windowlumi) / total_weight
+        centroid_x = np.sum(cols * windowlumi) / total_weight
+        return centroid_x, centroid_y
         
 
 
