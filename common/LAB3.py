@@ -24,6 +24,7 @@ import pandas as pd
 import numpy as np
 from astropy.wcs import WCS
 import sep
+from scipy.ndimage import maximum_filter
 from astropy.modeling.functional_models import Gaussian2D
 
 
@@ -167,7 +168,8 @@ class PSFPhot():
     
     '''
      我们的目标是估计上述图像的点扩散函数（PSF），然后测量这里恒星和星系的通量，同时考虑 PSF。
-     要开始这个过程，我们需要在这张图像中定位星星。上次我们看到如何使用 sep 分割图像，但在本次实验中我们将自己执行这个步骤，使用两种方法。
+     要开始这个过程，我们需要在这张图像中定位星星。上次我们看到如何使用 sep 分割图像，但在本次实验中我们将自己执行这个步骤，
+     使用两种方法。
     '''
     def set_image_mask(self, mask):
         if hasattr(self,'image'):
@@ -223,6 +225,7 @@ class PSFPhot():
     #     return peaks
 
     def findpeaks_maxfilter(self, threshold=None, image=None):
+        
         """
         使用最大值滤波查找图像中的峰值
         
@@ -233,26 +236,24 @@ class PSFPhot():
         返回:
         峰值位置数组，同时保存到self.peaks属性
         """
-        # 使用指定的图像或默认图像
         if image is None:
             image = self.image
         # 设置默认阈值
         if threshold is None:
             threshold = np.mean(image) + 3 * np.std(image)
-        # 应用最大值滤波
-        from scipy.ndimage import maximum_filter
-        neighborhood_size = 5
-        data_max = maximum_filter(image, neighborhood_size)
-        # 找到局部最大值
-        maxima = (image == data_max)
-        # 应用阈值
-        maxima[image < threshold] = 0
-        # 获取峰值坐标
-        peaks_y, peaks_x = np.where(maxima)
-        # 保存到类属性（作为(y,x)坐标对）
-        self.peaks = np.column_stack((peaks_y, peaks_x))
+
         
-        print(f"找到 {len(self.peaks)} 个峰值，已保存到 self.peaks")
+        neighborhood_size = 5
+
+        data_max = maximum_filter(image, neighborhood_size)
+
+        maxima = (image == data_max)
+
+        maxima[image < threshold] = 0
+
+        peaks_y, peaks_x = np.where(maxima)
+
+        self.peaks = np.column_stack((peaks_y, peaks_x))
         
         return self.peaks
     
@@ -343,9 +344,6 @@ class PSFPhot():
       最后，它应该使用我上面提供的 eval_gauss 函数来执行 PSF 测光。
     '''
     def psf_photometry(self, threshold=None, background_subtract=True):
-        """
-        最小化版PSF测光
-        """
         # 用图像
         img = self.image if background_subtract else self.data_calibrated
         # 找峰值
