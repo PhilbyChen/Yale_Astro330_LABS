@@ -1,0 +1,13 @@
+Best fit slope: 2.24 
+Best fit intercept: 34.55 
+Minimum chi2: 18.68 
+Degrees of freedom: 14 
+Reduced chi2: 1.33 
+==================================================  
+Scipy opt results: 
+m=2.2399, 
+b=34.0478, 
+χ²=18.6808 
+
+Grid search:      
+ m=2.2364, b=34.5455, χ²=18.6821

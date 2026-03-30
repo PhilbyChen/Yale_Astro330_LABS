@@ -12,9 +12,9 @@ from astropy.io import ascii
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
+from scipy.optimize import minimize
 
-
-data = ascii.read("D:\Documents\GitHub\Yale_Astro330_LABS\data\hogg_2010_data.txt")
+data = ascii.read("D:\Downloads\Documents\GitHub\Yale_Astro330_LABS\data\hogg_2010_data.txt")
 # 根据论文内容，移除前四个异常值数据
 cleandata = data[data['ID']>4]
 print(cleandata)
@@ -52,18 +52,88 @@ def chi2(clean_x, clean_y, m, b, y_err):
     chi2 = np.sum((residuals / y_err) ** 2)
     return chi2
 
-def minimize_chi2(clean_x, cleany, y_err, m_range, b_range, n_points=100):
+def minimize_chi2(clean_x, clean_y, y_err, m_range, b_range, n_points=100):
     '该函数将在你的 m 和 b 值的网格上，使用 chi2() 函数评估 chi2'
-    m_grid = np.linspace(m_range[0], m_range[1], n_points)
+    m_grid = np.linspace(m_range[0], m_range[1], n_points) 
     b_grid = np.linspace(b_range[0], b_range[1], n_points)
-    chi2_image = np.zeros((len(m_grid), len(b_grid)))
+    image = np.zeros((len(m_grid), len(b_grid)))
     # 记住， m 和 b 值不会直接索引你的数组。所以如果你打算这样做，你想要通过类似 for i,m in enumerate(m_grid): 和 for j,b in enumerate(b_grid): 来循环
     for i,m in enumerate(m_grid):
          for j,b in enumerate(b_grid):
-             chi2_image[i, j] = chi2(m, b, clean_x, clean_y, y_err)
+            image[i, j] = chi2(clean_x, clean_y,  m, b, y_err)
     # find min chi2
-    min_idx = np.unravel_index(np.argmin(chi2_image), chi2_image.shape)
-    best_m = m_grid[min_idx[0]]
+    min_idx = np.unravel_index(np.argmin(image), image.shape)
+    m_min = m_grid[min_idx[0]]
     best_b = b_grid[min_idx[1]]
     
-    return m_grid, b_grid, chi2_image, best_m, best_b
+    return m_grid, b_grid, image, m_min, best_b
+
+m_range = [1.8, 2.7]
+b_range = [-20, 80]
+n_points=100
+# ========== 运行网格搜索 ==========
+m_grid, b_grid, chi2_image, best_m, best_b = minimize_chi2(
+    clean_x, clean_y, y_err, m_range, b_range, n_points=100)
+# ========== 计算最小 chi2 ==========
+min_chi2 = chi2(clean_x, clean_y, best_m, best_b, y_err)
+
+print('='*50)
+print(f'Best fit slope:     {best_m:.2f}')
+print(f'Best fit intercept: {best_b:.2f}')
+print(f'Minimum chi2:       {min_chi2:.2f}')
+print(f'Degrees of freedom: {len(clean_x) - 2}')
+print(f'Reduced chi2:       {min_chi2/(len(clean_x) - 2):.2f}')
+print('='*50)
+
+# ========== Scipy 优化验证 ==========
+def chi2_func(params):
+    m, b = params
+    return chi2(clean_x, clean_y, m, b, y_err)
+
+result = minimize(chi2_func, x0=[best_m, best_b], method='Nelder-Mead')
+m_opt, b_opt = result.x
+chi2_opt = result.fun
+
+print(f'\nScipy opt results: m={m_opt:.4f}, b={b_opt:.4f}, χ²={chi2_opt:.4f}')
+print(f'Grid search:       m={best_m:.4f}, b={best_b:.4f}, χ²={min_chi2:.4f}')
+print('='*50)      
+
+extent = [m_grid.min(), m_grid.max(), b_grid.min(), b_grid.max()]
+fig, ax = plt.subplots(figsize=(10, 8))
+
+# 1. χ² 热力图 
+# 计算纵横比
+im = ax.imshow(chi2_image, origin='lower', extent=extent, 
+               aspect='auto', cmap='viridis', vmin=min_chi2, vmax=min_chi2+10)
+# 2. 置信区间等高线 
+levels = [min_chi2 + 1, min_chi2 + 2.3, min_chi2 + 6.17]
+ax.contour(chi2_image, levels=levels, extent=extent, colors='white', linewidths=1.5)
+# 3. 标记最佳拟合点
+ax.plot(best_m, best_b, 'o', color='blue', markersize=5, label=f'Grid: χ²={min_chi2:.1f}')
+ax.plot(m_opt, b_opt, 'o', color='red', markersize=5, label=f'Scipy: χ²={chi2_opt:.1f}')
+# 4. 颜色条和标签
+plt.colorbar(im, ax=ax, label=r'$\chi^2$')
+ax.set_xlabel('Slope (m)')
+ax.set_ylabel('Intercept (b)')
+ax.set_title('χ² Grid Search')
+ax.legend()
+ax.grid(True, alpha=0.3, ls='--')
+
+plt.tight_layout()
+plt.show()
+
+'Q3'
+'''Question 3
+Determine the best fit parameters and one-sigma errors from Question 1.2. 
+The best-fit value can either be the minimum chi2 value or (bonus) by fitting a function to your chi2 values and interpolating the best fit.
+Determine the 1-sigma errors on your best-fit parameters. by noting the surface where chi2 = chi2 +2.3
+'''
+# 找 Δχ² = 2.3 范围内的所有 (m, b) 点
+mask = chi2_image < (min_chi2 + 2.3)
+m_err = (m_grid[mask.any(axis=1)].max() - m_grid[mask.any(axis=1)].min()) / 2
+b_err = (b_grid[mask.any(axis=0)].max() - b_grid[mask.any(axis=0)].min()) / 2
+
+print('='*50)
+print(f'Best fit slope:     {m_opt:.2f} +/- {m_err:.2f}')
+print(f'Best fit intercept: {b_opt:.1f} +/- {b_err:.1f}')
+print(f'Minimum chi2:       {chi2_opt:.2f}')
