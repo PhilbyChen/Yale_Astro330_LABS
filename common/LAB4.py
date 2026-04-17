@@ -126,14 +126,22 @@ plt.show()
 '''Question 3
 Determine the best fit parameters and one-sigma errors from Question 1.2. 
 The best-fit value can either be the minimum chi2 value or (bonus) by fitting a function to your chi2 values and interpolating the best fit.
+
 Determine the 1-sigma errors on your best-fit parameters. by noting the surface where chi2 = chi2 +2.3
 '''
 # 找 Δχ² = 2.3 范围内的所有 (m, b) 点
-mask = chi2_image < (min_chi2 + 2.3)
-m_err = (m_grid[mask.any(axis=1)].max() - m_grid[mask.any(axis=1)].min()) / 2
-b_err = (b_grid[mask.any(axis=0)].max() - b_grid[mask.any(axis=0)].min()) / 2
+mask = (chi2_image - min_chi2) <= 2.3
+m_vals = m_grid[np.where[0]]
+b_vals = b_grid[np.where[1]]
+
+m_err_plus  = m_vals.max() - m_opt
+m_err_minus = m_opt - m_vals.min()
+
+b_err_plus  = b_vals.max() - b_opt
+b_err_minus = b_opt - b_vals.min()
 
 print('='*50)
-print(f'Best fit slope:     {m_opt:.2f} +/- {m_err:.2f}')
-print(f'Best fit intercept: {b_opt:.1f} +/- {b_err:.1f}')
-print(f'Minimum chi2:       {chi2_opt:.2f}')
+print(f'Best fit slope:     {m_opt:.3f} +{m_err_plus:.3f} -{m_err_minus:.3f}')
+print(f'Best fit intercept: {b_opt:.3f} +{b_err_plus:.3f} -{b_err_minus:.3f}')
+print(f'Minimum chi2:       {chi2_opt:.3f}')
+print('='*50)
