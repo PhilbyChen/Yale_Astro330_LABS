@@ -13,6 +13,7 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 from scipy.optimize import minimize
+from scipy.stats import skew, kurtosis
 
 data = ascii.read("D:\Downloads\Documents\GitHub\Yale_Astro330_LABS\data\hogg_2010_data.txt")
 # 根据论文内容，移除前四个异常值数据
@@ -131,8 +132,10 @@ Determine the 1-sigma errors on your best-fit parameters. by noting the surface 
 '''
 # 找 Δχ² = 2.3 范围内的所有 (m, b) 点
 mask = (chi2_image - min_chi2) <= 2.3
-m_vals = m_grid[np.where[0]]
-b_vals = b_grid[np.where[1]]
+
+indices = np.where(mask)
+m_vals = m_grid[indices[0]]
+b_vals = b_grid[indices[1]]
 
 m_err_plus  = m_vals.max() - m_opt
 m_err_minus = m_opt - m_vals.min()
@@ -145,3 +148,74 @@ print(f'Best fit slope:     {m_opt:.3f} +{m_err_plus:.3f} -{m_err_minus:.3f}')
 print(f'Best fit intercept: {b_opt:.3f} +{b_err_plus:.3f} -{b_err_minus:.3f}')
 print(f'Minimum chi2:       {chi2_opt:.3f}')
 print('='*50)
+
+'Q4:MCMC初步'
+'''
+Problem 1: 
+Look up (or choose) definitions for the mean, variance, skewness, and 
+kurtosis of a distribution. Also look up or compute the analytic values of these four statistics for a top-hat (uniform) distribution.
+ Write a computer program
+that usessome standard package (such as numpy11) to generate K random numbers x from a uniform distribution in the interval 0 < x < 1. 
+ Now use those K numbers
+to compute a sampling estimate of the mean, variance, skewness, and kurtosis(four estimates; look up definitions as needed). Make four plot of these four
+estimates as a function of 1/K or perhaps log2 K, for K = 4n for n = 1 up to n= 10 (that is, K = 4, K = 16, and so on up to K = 1048576). 
+Over-plot the analytic answers.
+ What can you conclude?
+'''
+
+n = np.arange(1, 11)
+K_list = 4 ** n
+# K = 4n for n = 1 up to n = 10 (that is, K = 4, K = 16, and so on up to K = 1048576).
+est_means = []
+est_variances = []
+est_skewnesses = []
+est_kurtosises = []
+
+rng = np.random.default_rng()
+
+for K in K_list:
+   
+    x = rng.random(K)
+    est_means.append(np.mean(x))
+    est_variances.append(np.var(x))
+    est_skewnesses.append(skew(x))
+    est_kurtosises.append(kurtosis(x))
+    print(f"Done for K = {K}")
+
+# 解析解
+true_mean = 0.5
+true_var = 1/12
+true_skew = 0.0
+true_kurt = -1.2
+
+x_axis = np.log2(K_list) 
+# 创建 2x2 的画布
+fig, axs = plt.subplots(2, 2, figsize=(12, 10))
+# --- 图 1: 均值 ---
+axs[0, 0].plot(x_axis, est_means, 'bo-', label='Sample Estimate')
+axs[0, 0].axhline(true_mean, color='r', linestyle='--', label=f'Analytic ({true_mean})')
+axs[0, 0].set_title('Mean')
+axs[0, 0].legend()
+# --- 图 2: 方差 ---
+axs[0, 1].plot(x_axis, est_variances, 'bo-', label='Sample Estimate')
+axs[0, 1].axhline(true_var, color='r', linestyle='--', label=f'Analytic ({true_var:.4f})')
+axs[0, 1].set_title('Variance')
+axs[0, 1].legend()
+# --- 图 3: 偏度 ---
+axs[1, 0].plot(x_axis, est_skewnesses, 'bo-', label='Sample Estimate')
+axs[1, 0].axhline(true_skew, color='r', linestyle='--', label=f'Analytic ({true_skew})')
+axs[1, 0].set_title('Skewness')
+axs[1, 0].legend()
+# --- 图 4: 峰度 ---
+axs[1, 1].plot(x_axis, est_kurtosises, 'bo-', label='Sample Estimate')
+axs[1, 1].axhline(true_kurt, color='r', linestyle='--', label=f'Analytic ({true_kurt})')
+axs[1, 1].set_title('Excess Kurtosis')
+axs[1, 1].legend()
+# 设置公共标签
+for ax in axs.flat:
+    ax.set_xlabel('log2(K)')
+    ax.set_ylabel('Value')
+    ax.grid(True, alpha=0.3)
+
+plt.tight_layout()
+plt.show()
