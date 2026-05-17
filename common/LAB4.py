@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 from scipy.optimize import minimize
 from scipy.stats import skew, kurtosis
 
-data = ascii.read("D:\Downloads\Documents\GitHub\Yale_Astro330_LABS\data\hogg_2010_data.txt")
+data = ascii.read("D:\\Documents\\GitHub\\Yale_Astro330_LABS\\data\\hogg_2010_data.txt")
 # 根据论文内容，移除前四个异常值数据
 cleandata = data[data['ID']>4]
 print(cleandata)
@@ -276,9 +276,8 @@ axs[1, 1].legend(fontsize=8)
 axs[1, 1].grid(True, alpha=0.3)
 
 plt.tight_layout()
-plt.savefig('outputs/LAB4/Q4_sampling_vs_logK.png', dpi=150, bbox_inches='tight')
 plt.show()
-print('[Saved] outputs/LAB4/Q4_sampling_vs_logK.png')
+
 
 # ==================== 图 2: 以 1/K 为 x 轴 ====================
 x_axis_invK = 1.0 / K_list               # 1/K
@@ -331,9 +330,8 @@ axs2[1, 1].grid(True, alpha=0.3)
 axs2[1, 1].set_xlim(x_axis_invK.max() * 1.1, -0.001)
 
 plt.tight_layout()
-plt.savefig('outputs/LAB4/Q4_sampling_vs_invK.png', dpi=150, bbox_inches='tight')
 plt.show()
-print('[Saved] outputs/LAB4/Q4_sampling_vs_invK.png')
+
 
 # ==================== 结论输出 ====================
 print('\n' + '=' * 75)
@@ -378,143 +376,290 @@ print('=' * 75)
 'Q4 - Problem 2: Metropolis-Hastings MCMC 采样器'
 '================================================================================'
 '''
-Problem 2:
+  MCMC 的直觉解释：
+把问题说成人话：
+
+你有一个模型，比如
+“行星数量 = f(Z, M, T)”
+
+但你不知道 Z、M、T 具体是多少，只知道观测数据长什么样。
+问题是：哪些参数组合是“说得通的”？
+
+不是找一个答案，而是找一堆“可能的答案”。
+
+现在做一个类比：在一片山地上找“高海拔区域”
+
+把每一组参数 θ = [Z, M, T] 想象成地图上的一个位置。
+这个位置的“高度”，定义为：
+
+模型和数据匹配得越好 → 高度越高
+
+所以你得到一个“地形”：
+
+拟合好 → 山峰
+拟合差 → 山谷
+
+你的目标不是找到最高峰（那是优化问题），
+而是：搞清楚整片“高地”长什么样。
+
+现在引入“随机游走者”（walker）
+
+想象一个人在这片山地里瞎走，他规则很简单：
+
+随机往一个方向迈一步
+看新位置“高度”如何
+
+然后按规则决定要不要过去：
+
+如果更高（拟合更好） → 基本肯定过去
+如果更低（拟合更差） → 有时候也过去
+
+关键问题：
+为什么更差也要过去？
+
+这是整个 MCMC 的核心。
+
+如果你“只允许往高处走”，会发生什么？
+
+→ 很容易卡在一个“小山头”（局部最优）
+→ 永远找不到更大的山
+
+所以必须允许“偶尔下坡”，这样才可能绕出去。
+
+这个“有时候接受差解”的概率，设计成：
+
+差得越多 → 越不容易接受
+但不是绝对不可能
+
+这一步，本质上是在模仿物理里的“热运动”（类似退火过程）。
+
+这样走久了，会出现一个很重要的现象：
+
+这个人待在某些区域的时间更长
+
+高的地方（拟合好） → 待很久
+低的地方（拟合差） → 很快离开
+
+于是：
+
+“他出现的频率” ≈ “这个参数组合的可信程度”
+
+这就是 MCMC 的本质：
+
+用“停留时间”来表示概率。
+
+现在解释“它不是拟合器”
+
+传统拟合在做什么？
+
+→ 找一个“最好的 θ”（最高峰）
+
+而 MCMC 在做什么？
+
+→ 记录“哪里经常被访问”
+
+最后你得到的不是一个点，而是一团“云”：
+
+云的中心 → 大致最可能的参数
+云的宽度 → 不确定性
+云的形状 → 参数之间的相关性
+
+举个更直观的结果解释：
+
+你跑完 MCMC，得到 10000 个 θ：
+
+你可以说：
+
+Z 大概在 0.01–0.02 之间
+M 和 T 有耦合关系（比如 M 大时 T 要小才能拟合好）
+
+而不是：
+
+“最佳参数是 Z=0.013, M=1.2, T=5800K”
+
+因为那个“最佳点”其实不稳定，也没那么有意义。
+
+最后把你原话中的几个术语翻译成直觉：
+
+似然（likelihood）
+→ “这个参数生成的数据看起来像不像真实数据”
+后验（posterior）
+→ “综合考虑数据 + 你原本的猜测后，这个参数有多可信”
+接受率（acceptance rate）
+→ “你愿意尝试走向更差解的频率”
+
+数学上区别：
+拟合（optimization）：θ∗=argmaxP(θ∣D)
+MCMC（sampling）：
+θ(1),θ(2),⋯∼P(θ∣D)
+也就是说：
+拟合 → 一个点
+MCMC → 整个分布
+
+一句话总结 MCMC：
+
+它不是在找答案，而是在画出“所有可能答案的分布”。
+
+
 Write a very simple M-H MCMC sampler. Sample in a single parameter x and give the
 sampler as its density function p(x) a Gaussian density with mean 2 and variance 2.
-(Note that variance is the square of the standard deviation.)
 Give the sampler a proposal distribution q(x' | x) a Gaussian pdf for x' with mean x
 and variance 1. Initialize the sampler with x = 0 and run for more than 10^4 steps.
 Plot the results as a histogram with the true density over-plotted sensibly.
 '''
-'''
-实际运行 MCMC 的过程:
-建立一个函数，给定一组输入参数输出一个模型,
-建立一组由一个θ向量定义的随机游走者，该向量包含模型生成函数使用的参数集。例如，如果我们构建了一个简单的模型，根据主星的金属丰度
-Z、质量 M 和温度T来预测一个系外系统中的行星数量,一个θ向量将如下所示:
-                                                  θ = [Z, M, T]
-人们可以想象一个可能的θ值的“网格”，在我们选择要变化的先验范围内。
-每个探索者现在将开始探索参数空间。为此，每个探索者会“走一步”到新的 θ,并生成一个具有该 θ 的模型。
-然后，它会将模型与给定数据进行比较，通常通过简单的χ2类型检查进行;
-MCMC 然后检查新模型生成的数据似然度与当前模型的比值。
-一般来说，如果新位置与数据有更好的匹配，游走者会移动到那里并重复该过程。如果新位置更差，它会退回到上一个位置并尝试新方向。
-有时，即使新位置很好，游走者也会保持不动，或者如果新位置很差，游走者也会移动——这是由所谓的接受率决定的，
-它确保游走者不会都被困在高概率的各个峰上。
-最终，所有游走者都开始向数据中生成的模型之间“相似度”最高的区域攀爬。
-有理由去思考“最佳匹配”是什么。但要记住，MCMC 不是一个“拟合器”，而是一个“采样器”。MCMC 不能告诉我们参数集 
-θ是“最佳”的——我们的模型中会有一个在数值上与数据“相似度”最高的，但如果我们重新运行 MCMC，或者运行得更长时间等，我们会得到不同的结果。
-MCMC 更擅长告诉我们的是类似“如果你从后验分布中随机抽取 100 个模型，
-这些模型之间的差异代表了我们对这些模型参数的约束能力”这样的信息。
-'''
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import norm
-
-# ==================== 目标分布 ====================
-# p(x) ~ N(μ=2, σ²=2), 即 σ = √2
-true_mu = 2.0
-true_sigma = np.sqrt(2)
-
-def target_pdf(x):
-    """目标分布: Gaussian(2, 2) 的概率密度"""
-    return norm.pdf(x, loc=true_mu, scale=true_sigma)
-
-# ==================== M-H 采样器 ====================
-def mh_sampler(n_steps, x_init=0.0, proposal_scale=1.0):
-    """
-    Metropolis-Hastings MCMC 采样器
-    - 目标分布: N(2, 2)
-    - 提议分布: N(x_current, proposal_scale²)
-    - 由于提议分布对称 (q(x'|x) = q(x|x')),
-      M-H 简化为 Metropolis 算法: α = min(1, p(x')/p(x))
-    """
-    samples = np.zeros(n_steps)
-    x_current = x_init
-    n_accepted = 0
-
-    for i in range(n_steps):
-        # 1. 从提议分布采样
-        x_proposal = np.random.normal(x_current, proposal_scale)
-
-        # 2. 计算接受率 (提议对称, 提议比 = 1)
-        p_current = target_pdf(x_current)
-        p_proposal = target_pdf(x_proposal)
-
-        # 安全处理: 若当前概率为 0 则强制接受
-        if p_current == 0:
-            alpha = 1.0
-        else:
-            alpha = min(1.0, p_proposal / p_current)
-
-        # 3. 接受或拒绝
-        if np.random.random() < alpha:
-            x_current = x_proposal
-            n_accepted += 1
-
-        samples[i] = x_current
-
-    return samples, n_accepted
-
-# ==================== 运行采样 ====================
-N = 15000                     # > 10⁴ 步
-burn_in = 5000                # 燃烧期 (burn-in)
-
-print('\n' + '=' * 75)
-print('Running M-H MCMC sampler...')
-print(f'Target:    N(μ={true_mu}, σ²={true_sigma**2})')
-print(f'Proposal:  N(x_current, σ²=1)')
-print(f'Initial:   x = 0')
-print(f'Steps:     {N} (burn-in: {burn_in})')
-print('=' * 75)
-
-samples, n_acc = mh_sampler(N, x_init=0.0, proposal_scale=1.0)
-samples_after_burnin = samples[burn_in:]
-acceptance_rate = n_acc / N * 100
-
-# ==================== 绘图: 1x2 子图 (轨迹 + 直方图) ====================
-fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-fig.suptitle('M-H MCMC Sampler for N(\u03bc=2, \u03c3\u00b2=2)', fontsize=14)
-
-# ---- 图 1: 轨迹图 (Trace Plot) ----
-axes[0].plot(samples, alpha=0.6, linewidth=0.3, color='steelblue')
-axes[0].axvline(burn_in, color='red', linestyle='--', linewidth=1.5,
-                label=f'Burn-in ({burn_in} steps)', alpha=0.7)
-axes[0].axhline(true_mu, color='green', linestyle='-', linewidth=1.5,
-                label=f'True \u03bc = {true_mu}')
-axes[0].set_xlabel('Step')
-axes[0].set_ylabel('x')
-axes[0].set_title(f'Trace Plot\nAcceptance Rate: {acceptance_rate:.1f}%')
-axes[0].legend(fontsize=8, loc='upper right')
-axes[0].grid(True, alpha=0.3)
-
-# ---- 图 2: 直方图 + 真实密度 ----
-axes[1].hist(samples_after_burnin, bins=60, density=True, alpha=0.6,
-             color='steelblue', edgecolor='white',
-             label=f'MCMC Samples (n={len(samples_after_burnin)})')
-
-x_grid = np.linspace(-4, 8, 500)
-axes[1].plot(x_grid, target_pdf(x_grid), 'r-', linewidth=2.5,
-             label=f'True: N(\u03bc={true_mu}, \u03c3\u00b2={true_sigma**2:.0f})')
-axes[1].set_xlabel('x')
-axes[1].set_ylabel('Probability Density')
-axes[1].set_title('Histogram vs True Distribution')
-axes[1].legend(fontsize=9)
-axes[1].grid(True, alpha=0.3)
-
-plt.tight_layout()
-plt.savefig('outputs/LAB4/Q4_MH_MCMC.png', dpi=150, bbox_inches='tight')
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# 高斯函数的一般形式
+# $$f(x) = \frac{1}{\sqrt{2\pi}\sigma} \exp\left( -\frac{(x - \mu)^2}{2\sigma^2} \right)$$
+def log_gaussian_pdf(x):
+    # 计算高斯分布的对数概率密度函数 (log PDF);  mean 2 and variance 2
+    return -(x - 2)**2/ (2 * 2)
+sample = []
+x = 0
+N = 10000
+# start MCMC:
+for i in range(N):
+    # proposal distribution q(x' | x) a Gaussian pdf for x' with mean x and variance 1
+    x_new = x + np.random.normal(0, 1)   # 提议分布
+    log_alpha = log_gaussian_pdf(x_new) - log_gaussian_pdf(x)   # P(θ'|D) / P(θ|D)
+    if np.log(np.random.rand()) < log_alpha:                    # 接受概率
+        x = x_new
+    sample.append(x)
+plt.hist(sample, bins=50, density=True)  #柱子的面积代表概率
+x_grid = np.linspace(-2, 6, 200)   # 构造坐标，200个点
+true_pdf = 1/np.sqrt(2*np.pi*2) * np.exp(-(x_grid-2)**2/(2*2))
+plt.plot(x_grid, true_pdf)
 plt.show()
-print('[Saved] outputs/LAB4/Q4_MH_MCMC.png')
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+'''AI 版本的 M-H MCMC 采样器实现'''
+# # ==================== 目标分布 ====================
+# # p(x) ~ N(μ=2, σ²=2), 即 σ = √2
+# true_mu = 2.0
+# true_sigma = np.sqrt(2)
 
-# ==================== 统计摘要 ====================
-sample_mean = np.mean(samples_after_burnin)
-sample_var  = np.var(samples_after_burnin)
-sample_std  = np.std(samples_after_burnin)
+# def target_pdf(x):
+#     """目标分布: Gaussian(2, 2) 的概率密度"""
+#     return norm.pdf(x, loc=true_mu, scale=true_sigma)
 
-print('\n' + '=' * 75)
-print('Results (after burn-in):')
-print('=' * 75)
-print(f'  Sample mean:     {sample_mean:.4f}  (true: {true_mu})')
-print(f'  Sample std:      {sample_std:.4f}  (true: {true_sigma:.4f})')
-print(f'  Sample variance: {sample_var:.4f}  (true: {true_sigma**2:.4f})')
-print(f'  Acceptance rate: {acceptance_rate:.1f}%')
-print('=' * 75)
+# # ==================== M-H 采样器 ====================
+# def mh_sampler(n_steps, x_init=0.0, proposal_scale=1.0):
+#     """
+#     Metropolis-Hastings MCMC 采样器
+#     - 目标分布: N(2, 2)
+#     - 提议分布: N(x_current, proposal_scale²)
+#     - 由于提议分布对称 (q(x'|x) = q(x|x')),
+#       M-H 简化为 Metropolis 算法: α = min(1, p(x')/p(x))
+#     """
+#     samples = np.zeros(n_steps)
+#     x_current = x_init
+#     n_accepted = 0
+
+#     for i in range(n_steps):
+#         # 1. 从提议分布采样
+#         x_proposal = np.random.normal(x_current, proposal_scale)
+
+#         # 2. 计算接受率 (提议对称, 提议比 = 1)
+#         p_current = target_pdf(x_current)
+#         p_proposal = target_pdf(x_proposal)
+
+#         # 安全处理: 若当前概率为 0 则强制接受
+#         if p_current == 0:
+#             alpha = 1.0
+#         else:
+#             alpha = min(1.0, p_proposal / p_current)
+
+#         # 3. 接受或拒绝
+#         if np.random.random() < alpha:
+#             x_current = x_proposal
+#             n_accepted += 1
+
+#         samples[i] = x_current
+
+#     return samples, n_accepted
+
+# # ==================== 运行采样 ====================
+# N = 15000                     # > 10⁴ 步
+# burn_in = 5000                # 燃烧期 (burn-in)
+
+# print('\n' + '=' * 75)
+# print('Running M-H MCMC sampler...')
+# print(f'Target:    N(μ={true_mu}, σ²={true_sigma**2})')
+# print(f'Proposal:  N(x_current, σ²=1)')
+# print(f'Initial:   x = 0')
+# print(f'Steps:     {N} (burn-in: {burn_in})')
+# print('=' * 75)
+
+# samples, n_acc = mh_sampler(N, x_init=0.0, proposal_scale=1.0)
+# samples_after_burnin = samples[burn_in:]
+# acceptance_rate = n_acc / N * 100
+
+# # ==================== 绘图: 1x2 子图 (轨迹 + 直方图) ====================
+# fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+# fig.suptitle('M-H MCMC Sampler for N(\u03bc=2, \u03c3\u00b2=2)', fontsize=14)
+
+# # ---- 图 1: 轨迹图 (Trace Plot) ----
+# axes[0].plot(samples, alpha=0.6, linewidth=0.3, color='steelblue')
+# axes[0].axvline(burn_in, color='red', linestyle='--', linewidth=1.5,
+#                 label=f'Burn-in ({burn_in} steps)', alpha=0.7)
+# axes[0].axhline(true_mu, color='green', linestyle='-', linewidth=1.5,
+#                 label=f'True \u03bc = {true_mu}')
+# axes[0].set_xlabel('Step')
+# axes[0].set_ylabel('x')
+# axes[0].set_title(f'Trace Plot\nAcceptance Rate: {acceptance_rate:.1f}%')
+# axes[0].legend(fontsize=8, loc='upper right')
+# axes[0].grid(True, alpha=0.3)
+
+# # ---- 图 2: 直方图 + 真实密度 ----
+# axes[1].hist(samples_after_burnin, bins=60, density=True, alpha=0.6,
+#              color='steelblue', edgecolor='white',
+#              label=f'MCMC Samples (n={len(samples_after_burnin)})')
+
+# x_grid = np.linspace(-4, 8, 500)
+# axes[1].plot(x_grid, target_pdf(x_grid), 'r-', linewidth=2.5,
+#              label=f'True: N(\u03bc={true_mu}, \u03c3\u00b2={true_sigma**2:.0f})')
+# axes[1].set_xlabel('x')
+# axes[1].set_ylabel('Probability Density')
+# axes[1].set_title('Histogram vs True Distribution')
+# axes[1].legend(fontsize=9)
+# axes[1].grid(True, alpha=0.3)
+
+# plt.tight_layout()
+# plt.savefig('outputs/LAB4/Q4_MH_MCMC.png', dpi=150, bbox_inches='tight')
+# plt.show()
+# print('[Saved] outputs/LAB4/Q4_MH_MCMC.png')
+
+# # ==================== 统计摘要 ====================
+# sample_mean = np.mean(samples_after_burnin)
+# sample_var  = np.var(samples_after_burnin)
+# sample_std  = np.std(samples_after_burnin)
+
+# print('\n' + '=' * 75)
+# print('Results (after burn-in):')
+# print('=' * 75)
+# print(f'  Sample mean:     {sample_mean:.4f}  (true: {true_mu})')
+# print(f'  Sample std:      {sample_std:.4f}  (true: {true_sigma:.4f})')
+# print(f'  Sample variance: {sample_var:.4f}  (true: {true_sigma**2:.4f})')
+# print(f'  Acceptance rate: {acceptance_rate:.1f}%')
+# print('=' * 75)
+"""Problem 3: Re-do Problem 2 but now with an input density that is uniform on
+3 < x < 7 and zero everywhere else. The plot should look like Figure 2. What change
+did you have to make to the initialization, and why?
+"""
+"""Problem 4: Re-do Problem 2 but now with an input density that is a function of
+two variables (x, y). For the density function use two different functions. (a) The
+first density function is a covariant two-dimensional Gaussian density with variance
+tensor
+V =[2.0 1.2
+    1.2 2.0]
+(b) The second density function is a rectangular top-hat
+function that is uniform on the joint constraint 3 < x < 7 and
+1 < y < 9 and zero everywhere else. For the proposal
+distribution q(x',y'|x,y), use a two-dimensional Gaussian
+density with mean at [x, y] and variance tensor set to the
+two-dimensional identity matrix. Plot the two one-dimensional
+histograms and also a two-dimensional scatterplot for each
+sampling. Figure 3 shows the expected results for the Gaussian.
+Make a similar plot for the top hat
+"""
