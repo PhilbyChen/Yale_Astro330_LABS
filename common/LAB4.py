@@ -647,6 +647,29 @@ plt.show()
 3 < x < 7 and zero everywhere else. The plot should look like Figure 2. What change
 did you have to make to the initialization, and why?
 """
+def p_log(x):
+    if (x > 3) & (x < 7):
+        return 0# 任意常数
+    else:
+        return -np.inf  # 区间外概率为零，log为负无穷 
+sample1 = []
+x = 5
+N = 10000
+# start MCMC:
+for i in range(N):
+    # proposal distribution q(x' | x) a Gaussian pdf for x' with mean x and variance 1
+    x_new = x + np.random.normal(0, 1)   # 提议分布
+    log_alpha = p_log(x_new) - p_log(x)   # P(θ'|D) / P(θ|D)
+    if np.log(np.random.rand()) < log_alpha: 
+        x = x_new
+    sample1.append(x)
+plt.hist(sample1, bins=50, density=True)  #柱子的面积代表概率
+x_grid = np.linspace(-2, 6, 200)   # 构造坐标，200个点
+true_pdf = np.where((x_grid > 3) & (x_grid < 7), 1/4, 0)
+plt.plot(x_grid, true_pdf)
+plt.show()
+
+
 """Problem 4: Re-do Problem 2 but now with an input density that is a function of
 two variables (x, y). For the density function use two different functions. (a) The
 first density function is a covariant two-dimensional Gaussian density with variance
@@ -663,3 +686,47 @@ histograms and also a two-dimensional scatterplot for each
 sampling. Figure 3 shows the expected results for the Gaussian.
 Make a similar plot for the top hat
 """
+# 二维Gauss： p(x)=(2π)d/2∣V∣1/21​exp(−21​(x−μ)TV−1(x−μ))    x=(x,y)， μ=(μx​,μy) V = 协方差矩阵，V−1 = 协方差矩阵的逆
+V = np.array([[2.0, 1.2],
+              [1.2, 2.0]])
+V_inv = np.linalg.inv(V)
+mu = np.array([2.0, 2.0])
+def log_gaussian_2d(x):
+    dx = x - mu
+    return -0.5 * dx.T @ V_inv @ dx   # 忽略归一化常数
+
+# ===== MCMC =====
+N = 20000
+samples = []
+
+x = np.array([0.0, 0.0])  # 初始点
+
+for i in range(N):
+    x_new = x + np.random.normal(0, 1)
+    log_alpha = log_gaussian_2d(x_new) - log_gaussian_2d(x)
+    if np.log(np.random.rand()) < log_alpha:
+        x = x_new
+    samples.append(x.copy())
+
+samples = np.array(samples)
+
+# ===== plot =====
+plt.figure(figsize=(12,4))
+
+# x histogram
+plt.subplot(1,3,1)
+plt.hist(samples[:,0], bins=50, density=True)
+plt.title("x marginal")
+
+# y histogram
+plt.subplot(1,3,2)
+plt.hist(samples[:,1], bins=50, density=True)
+plt.title("y marginal")
+
+# scatter
+plt.subplot(1,3,3)
+plt.scatter(samples[:,0], samples[:,1], s=5, alpha=0.3)
+plt.title("2D scatter")
+
+plt.tight_layout()
+plt.show()
