@@ -670,10 +670,10 @@ plt.plot(x_grid, true_pdf)
 plt.show()
 
 
-"""Problem 4: Re-do Problem 2 but now with an input density that is a function of
-two variables (x, y). For the density function use two different functions. (a) The
-first density function is a covariant two-dimensional Gaussian density with variance
-tensor
+"""Problem 4: 
+Re-do Problem 2 but now with an input density that is a function of
+two variables (x, y). For the density function use two different functions. 
+(a) The first density function is a covariant two-dimensional Gaussian density with variance tensor
 V =[2.0 1.2
     1.2 2.0]
 (b) The second density function is a rectangular top-hat
@@ -690,43 +690,88 @@ Make a similar plot for the top hat
 V = np.array([[2.0, 1.2],
               [1.2, 2.0]])
 V_inv = np.linalg.inv(V)
-mu = np.array([2.0, 2.0])
-def log_gaussian_2d(x):
-    dx = x - mu
-    return -0.5 * dx.T @ V_inv @ dx   # 忽略归一化常数
 
-# ===== MCMC =====
-N = 20000
-samples = []
+def second_dim_MCMC(logp, x0, N = 20000):
+    samples = []
+    x = np.array(x0)
+    for i in range(N):
+        x_new = x + np.random.normal(0, 1, size=2)  # 二维提议分布
+        log_alpha = logp(x_new) - logp(x)            # 计算接受率
+        if np.log(np.random.rand()) < log_alpha:     # 接受或拒绝
+            x = x_new
+        samples.append(x.copy())
+    return np.array(samples)
 
-x = np.array([0.0, 0.0])  # 初始点
+# (b)tophat
+def log_tophat(x):
+    if 3 < x[0] < 7 and 1 < x[1] < 9:
+        return 0.0
+    else:
+        return -np.inf
 
-for i in range(N):
-    x_new = x + np.random.normal(0, 1)
-    log_alpha = log_gaussian_2d(x_new) - log_gaussian_2d(x)
-    if np.log(np.random.rand()) < log_alpha:
-        x = x_new
-    samples.append(x.copy())
+# 注意：必须从区域内部开始
+samples_tophat = second_dim_MCMC(log_tophat, [5.0, 5.0])
 
-samples = np.array(samples)
-
-# ===== plot =====
 plt.figure(figsize=(12,4))
 
-# x histogram
 plt.subplot(1,3,1)
-plt.hist(samples[:,0], bins=50, density=True)
-plt.title("x marginal")
+plt.hist(samples_tophat[:,0], bins=50, density=True)
+plt.title("x marginal (Top-hat)")
 
-# y histogram
 plt.subplot(1,3,2)
-plt.hist(samples[:,1], bins=50, density=True)
-plt.title("y marginal")
+plt.hist(samples_tophat[:,1], bins=50, density=True)
+plt.title("y marginal (Top-hat)")
 
-# scatter
 plt.subplot(1,3,3)
-plt.scatter(samples[:,0], samples[:,1], s=5, alpha=0.3)
-plt.title("2D scatter")
+plt.hexbin(samples_tophat[:,0], samples_tophat[:,1], gridsize=40)
+plt.colorbar()
+plt.title("2D scatter (Top-hat)")
 
 plt.tight_layout()
 plt.show()
+
+
+#(a)
+# 协方差矩阵
+V = np.array([[2.0, 1.2],
+              [1.2, 2.0]])
+V_inv = np.linalg.inv(V)
+
+mu = np.array([2.0, 2.0])
+
+def log_gaussian_2d(x):
+    dx = x - mu
+    return -0.5 * dx.T @ V_inv @ dx   # 忽略常数
+
+# 运行 MCMC
+samples_gaussian = second_dim_MCMC(log_gaussian_2d, [0.0, 0.0])
+
+# ===== 画图 =====
+plt.figure(figsize=(12,4))
+
+plt.subplot(1,3,1)
+plt.hist(samples_gaussian[:,0], bins=50, density=True)
+plt.title("x marginal (Gaussian)")
+
+plt.subplot(1,3,2)
+plt.hist(samples_gaussian[:,1], bins=50, density=True)
+plt.title("y marginal (Gaussian)")
+
+plt.subplot(1,3,3)
+plt.scatter(samples_gaussian[:,0], samples_gaussian[:,1], s=5, alpha=0.3)
+plt.title("2D scatter (Gaussian)")
+
+plt.tight_layout()
+plt.show()
+
+
+"""
+Question 5
+While the above problems should give you a sense for how MCMC works, most reseach problems use standard packages to run MCMC. 
+MCMC packages in astronomy include emcee, MultiNest, Dynasty.
+
+Write an MCMC to evaluate the data in Question 1+2 above using emcee. We suggest checking out the guide to MCMC here:
+https://prappleizer.github.io/Tutorials/MCMC/MCMC_Tutorial.html
+
+We suggest 20 walkers and 2000 steps for your sampler. Plot both the sampler chains and a corner plot of the results.
+Compare the best fit values for m and b from the chi2 and MCMC, as well as their errors."""
