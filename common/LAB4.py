@@ -14,6 +14,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 from scipy.optimize import minimize
 from scipy.stats import skew, kurtosis
+import emcee
 
 data = ascii.read("D:\\Documents\\GitHub\\Yale_Astro330_LABS\\data\\hogg_2010_data.txt")
 # 根据论文内容，移除前四个异常值数据
@@ -489,14 +490,14 @@ M 和 T 有耦合关系（比如 M 大时 T 要小才能拟合好）
 → “你愿意尝试走向更差解的频率”
 
 数学上区别：
-拟合（optimization）：θ∗=argmaxP(θ∣D)
-MCMC（sampling）：
-θ(1),θ(2),⋯∼P(θ∣D)
+拟合(optimization),θ∗=argmaxP(θ|D)
+MCMC(sampling):
+θ(1),θ(2),⋯∼P(θ|D)
 也就是说：
 拟合 → 一个点
 MCMC → 整个分布
 
-一句话总结 MCMC：
+一句话总结 MCMC:
 
 它不是在找答案，而是在画出“所有可能答案的分布”。
 
@@ -770,8 +771,101 @@ Question 5
 While the above problems should give you a sense for how MCMC works, most reseach problems use standard packages to run MCMC. 
 MCMC packages in astronomy include emcee, MultiNest, Dynasty.
 
-Write an MCMC to evaluate the data in Question 1+2 above using emcee. We suggest checking out the guide to MCMC here:
-https://prappleizer.github.io/Tutorials/MCMC/MCMC_Tutorial.html
+Write an MCMC to evaluate the data in Question 1+2 above using emcee. 
 
 We suggest 20 walkers and 2000 steps for your sampler. Plot both the sampler chains and a corner plot of the results.
 Compare the best fit values for m and b from the chi2 and MCMC, as well as their errors."""
+
+import emcee
+import corner
+from scipy.optimize import curve_fit
+# 最开始所用数据
+x = cleandata['x']
+y = cleandata['y']
+y_err = cleandata['sigma_y']
+
+def line_model(x, m, b):
+    return m * x + b
+
+# Compare the best fit values for m and b from the chi2 and MCMC, as well as their errors.
+popt, pcov = curve_fit(
+    line_model,
+    x,
+    y,
+    sigma=y_err,
+    absolute_sigma=True
+)
+m_chi2, b_chi2 = popt
+m_chi2_err, b_chi2_err = np.sqrt(np.diag(pcov))
+print("Chi-square best fit:")
+print(f"m = {m_chi2:.4f} ± {m_chi2_err:.4f}")
+print(f"b = {b_chi2:.4f} ± {b_chi2_err:.4f}")
+
+def log_likelihood(theta, x, y, yerr):
+    m, b = theta
+
+    y_model = line_model(x, m, b)
+
+    chi2 = np.sum(((y - y_model) / yerr)**2)
+
+    return -0.5 * chi2
+
+def log_prior(theta):
+    m, b = theta
+
+    if -100 < m < 100 and -100 < b < 100:
+        return 0.0
+    else:
+        return -np.inf
+    
+def log_probability(theta, x, y, yerr):
+    lp = log_prior(theta)
+
+    if not np.isfinite(lp):
+        return -np.inf
+
+    return lp + log_likelihood(theta, x, y, yerr)
+
+
+ndim = 2
+nwalkers = 20
+nsteps = 2000
+
+
+initial = np.array([m_chi2, b_chi2])
+
+pos = initial + 1e-4 * np.random.randn(nwalkers, ndim)
+
+"核心:emcee, 完成MCMC"
+sampler = emcee.EnsembleSampler(
+    nwalkers,
+    ndim,
+    log_probability,
+    args=(x, y, y_err)
+)
+sampler.run_mcmc(pos, nsteps, progress=True)
+
+
+samples_chain = sampler.get_chain()
+
+fig, axes = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
+labels = ["m", "b"]
+for i in range(ndim):
+    ax = axes[i]
+    ax.plot(samples_chain[:, :, i], alpha=0.5)
+    ax.set_ylabel(labels[i])
+axes[-1].set_xlabel("step number")
+plt.tight_layout()
+plt.show()
+
+burnin = 500
+flat_samples = sampler.get_chain(discard=burnin, flat=True)
+
+fig = corner.corner(
+    flat_samples,
+    labels=["m", "b"],
+    truths=[m_chi2, b_chi2],
+    show_titles=True
+)
+
+plt.show()
