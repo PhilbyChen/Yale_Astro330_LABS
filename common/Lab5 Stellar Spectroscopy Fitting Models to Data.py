@@ -18,9 +18,24 @@ Fitting polynomials to 2D surfaces, corner plots
 
 import numpy as np
 import matplotlib.pyplot as plt
-
+import matplotlib as mpl
 from astropy.io import fits
 from scipy.ndimage import gaussian_filter1d
 
 from astropy.io import fits
-file = 'spec1d_DE.20110603.45055-n7006a_DEIMOS_2011Jun03T123053.021.fits'
+file = r"D:\Documents\GitHub\Yale_Astro330_LABS\data\lab5_data\spec1d_DE.20110603.45055-n7006a_DEIMOS_2011Jun03T123053.021.fits"
+
+hdu = fits.open(file)
+
+'Q3:Question 3: Plotting 1D PypeIt output spectra and fitting by eye'
+starlist = [121,135,157]
+for i in starlist:
+    data = hdu[i].data
+
+    fig,ax = plt.subplots(figsize=(15,3))
+    plt.plot(data['OPT_WAVE'],data['OPT_COUNTS'])
+    plt.title('Star ID: {}'.format(i))
+    plt.xlim(8300,8850)
+    plt.xlabel('Wavelength (Ang)')
+    plt.ylabel('Counts')
+    plt.show()
