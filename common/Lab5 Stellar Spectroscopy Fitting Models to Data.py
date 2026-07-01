@@ -39,3 +39,22 @@ for i in starlist:
     plt.xlabel('Wavelength (Ang)')
     plt.ylabel('Counts')
     plt.show()
+
+'为了大致了解每颗恒星的速度，你可以尝试“目测”粗略估计一下。上面光谱中最强的三条谱线来自 CaII: 8500.36、8544.44 和 8664.52 埃。你估计它们的速度是多少？'
+data = hdu[121].data
+wave = data["OPT_WAVE"]
+flux = data["OPT_COUNTS"]
+
+plt.figure(figsize=(10, 4))
+plt.plot(wave, flux)
+ca_lines = [8500.36, 8544.44, 8664.52]
+for line in ca_lines:
+    plt.figure(figsize=(8, 3))
+    plt.plot(wave, flux)
+    plt.axvline(line, linestyle="--")
+    plt.xlim(line - 25, line + 10)
+    plt.xlabel("Wavelength (Å)")
+    plt.ylabel("Counts")
+    plt.title(f"Ca II line near {line:.2f} Å")
+    plt.grid()
+    plt.show()
