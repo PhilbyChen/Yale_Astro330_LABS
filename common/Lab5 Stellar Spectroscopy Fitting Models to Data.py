@@ -58,3 +58,47 @@ for line in ca_lines:
     plt.title(f"Ca II line near {line:.2f} Å")
     plt.grid()
     plt.show()
+'''Question 4: Synthetic model spectra'''
+'''可以通过测量已知吸收线的中心（目测或拟合高斯函数）并将其与恒星的静止波长进行比较，来测量恒星的速度。
+虽然这种方法可以估算恒星的速度，但它浪费了完整光谱中的大部分信息。为了确定更精确的速度，我们采用“模板拟合”方法，即将已知速度的光谱与待测光谱进行比较。
+模板光谱可以是经验性的（已知速度的标准恒星的观测光谱），也可以是合成的（根据恒星模型数值计算得出）。
+这里我们将使用来自 PHEONIX 库的合成模板:https://phoenix.astro.physik.uni-goettingen.de/'''
+
+template_file = 'dmost_lte_5000_3.0_-2.0_.fits'
+def read_synthetic_spectrum(pfile):
+    '''
+    Function to load synthetic template file into python using vacuum wavelengths
+    
+    Parameters
+    ----------
+    pfile: str
+        path to the synthitic fits file to load. 
+        
+    Returns
+    -------
+    pwave: float array
+        Wavelengths of synthetic spectrum
+    pflux: float array
+        Flux of sythetic spectrum
+    '''
+
+    with fits.open(pfile) as hdu:
+        data     = hdu[1].data
+        
+    pflux = np.array(data['flux']).flatten()
+    awave = np.exp((data['wave']).flatten())
+    
+    # CONVERTING AIR WAVELENGTHS TO VACUUM
+    s = 10**4 / awave
+    n = 1. + 0.00008336624212083 + \
+            (0.02408926869968 / (130.1065924522 - s**2)) +\
+            (0.0001599740894897 / (38.92568793293 - s**2))
+
+    pwave  = awave*n
+    
+    return pwave, pflux
+'''Question 5: Synthetic model spectra -- Smoothing and Continuum fitting'''
+'''我们将把合成光谱拟合到科学数据，目的是确定科学光谱的速度。合成光谱的速度为零。为了与科学数据匹配，我们需要：
+(1)将合成光谱平滑到科学数据的波长分辨率；
+(2)将合成光谱平移到科学数据的速度；
+(3)重新分箱合成光谱并匹配连续谱水平。'''
