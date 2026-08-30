@@ -24,6 +24,11 @@ import matplotlib.pyplot as plt
 from astropy.io import fits
 from scipy.ndimage import gaussian_filter1d
 
+# 优先使用 Windows 中文字体，避免新增的中文图标题显示成方框。
+# 当前 lab5_figure 总标题已改为英文；字体设置仍保留，方便其他中文图中文字正常显示。
+plt.rcParams["font.sans-serif"] = ["Microsoft YaHei", "SimHei", "DejaVu Sans"]
+plt.rcParams["axes.unicode_minus"] = False
+
 OBSERVED_FILE = r"D:\Documents\GitHub\Yale_Astro330_LABS\data\lab5_data\spec1d_DE.20110603.45055-n7006a_DEIMOS_2011Jun03T123053.021.fits"
 TEMPLATE_FILE = r"D:\Documents\GitHub\Yale_Astro330_LABS\data\lab5_data\dmost_lte_5000_3.0_-2.0_.fits"
 
@@ -33,6 +38,9 @@ C_KMS = 2.997924e5  # 光速，单位 km/s；速度也使用 km/s。
 
 # 这个 FITS 文件里有很多 extension；每颗星对应其中一个 extension。
 observed_hdu = fits.open(OBSERVED_FILE)
+
+# 所有图共用一个连续编号，标题格式为 lab5_figure#_图内容。
+figure_number = 1
 
 
 # %% Q3：先看数据，并用 Ca II 吸收线目测速度
@@ -44,13 +52,18 @@ for star_id in STAR_IDS:
     spectrum = observed_hdu[star_id].data
 
     fig, ax = plt.subplots(figsize=(15, 3))
+    fig.suptitle(
+        f"lab5_figure{figure_number}_Q3_star{star_id}_observed_spectrum"
+    )
     ax.plot(spectrum["OPT_WAVE"], spectrum["OPT_COUNTS"])
     ax.set_xlim(8300, 8850)
     ax.set_xlabel("Wavelength (Å)")
     ax.set_ylabel("Counts")
     ax.set_title(f"Star ID: {star_id}")
     fig.tight_layout()
+    fig.subplots_adjust(top=0.80)
     plt.show()
+    figure_number += 1
 
 '''为了大致了解每颗恒星的速度，你可以尝试“目测”粗略估计一下。上面光谱中最强的三条谱线来自 CaII: 8500.36、8544.44 和 8664.52 埃。
 你估计它们的速度是多少？'''
@@ -64,6 +77,10 @@ example_flux = example_spectrum["OPT_COUNTS"]
 
 for rest_wavelength in CAII_REST_WAVELENGTHS:
     fig, ax = plt.subplots(figsize=(8, 3))
+    fig.suptitle(
+        f"lab5_figure{figure_number}_Q3_star{EXAMPLE_STAR_ID}_"
+        f"CaII_{rest_wavelength:.2f}Angstrom_absorption_line"
+    )
     ax.plot(example_wave, example_flux)
     ax.axvline(rest_wavelength, color="black", linestyle="--", label="Rest wavelength")
     ax.set_xlim(rest_wavelength - 25, rest_wavelength + 10)
@@ -73,7 +90,9 @@ for rest_wavelength in CAII_REST_WAVELENGTHS:
     ax.legend()
     ax.grid(alpha=0.3)
     fig.tight_layout()
+    fig.subplots_adjust(top=0.80)
     plt.show()
+    figure_number += 1
 
 
 # %% Q4：读取合成模板
@@ -185,6 +204,10 @@ for star_id in STAR_IDS:
     # 这条原始注释按要求保留；当前清晰版在 Q6 中重新按列命名这些数据。
 
     fig, ax = plt.subplots(figsize=(12, 4))
+    fig.suptitle(
+        f"lab5_figure{figure_number}_Q5_star{star_id}_"
+        f"zero_velocity_template_vs_observed_spectrum"
+    )
     ax.plot(data_wave, data_flux, label="Science spectrum")
     ax.plot(data_wave, zero_velocity_model, label="Zero-velocity model")
     ax.set_xlim(8300, 8700)
@@ -193,7 +216,9 @@ for star_id in STAR_IDS:
     ax.set_title(f"Q5: Star ID {star_id}")
     ax.legend()
     fig.tight_layout()
+    fig.subplots_adjust(top=0.82)
     plt.show()
+    figure_number += 1
 
 
 # %% Q6：尝试很多速度，找出 chi-square 最小的那个
@@ -315,6 +340,9 @@ for star_id in STAR_IDS:
     )
 
     fig, ax = plt.subplots(figsize=(10, 4))
+    fig.suptitle(
+        f"lab5_figure{figure_number}_Q6_star{star_id}_velocity_chi-square_curve"
+    )
     ax.plot(velocities, chi2_values, ".")
     ax.axvline(best_velocity, color="red", label="Best velocity")
     ax.set_xlabel("Velocity (km/s)")
@@ -325,7 +353,9 @@ for star_id in STAR_IDS:
     )
     ax.legend()
     fig.tight_layout()
+    fig.subplots_adjust(top=0.82)
     plt.show()
+    figure_number += 1
 
 
 observed_hdu.close()
