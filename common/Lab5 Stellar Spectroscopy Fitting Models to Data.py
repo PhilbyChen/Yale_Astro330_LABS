@@ -1,4 +1,7 @@
-"""Lab 5: Stellar Spectroscopy + Fitting Models to Data"""
+"""Lab 5: Stellar Spectroscopy + Fitting Models to Data
+
+当前进度是 Q3-Q6：先观察恒星光谱，再用合成模板和 chi-square 测量视向速度。
+"""
 
 """在本实验中，我们将指导您读取、绘制和拟合银河系球状星团中恒星的光谱。
 科学目标是确定少数恒星的速度及其误差，从而判断它们是球状星团的成员，还是银河系的前景恒星。
@@ -18,47 +21,63 @@ Fitting polynomials to 2D surfaces, corner plots
 
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib as mpl
 from astropy.io import fits
 from scipy.ndimage import gaussian_filter1d
 
-from astropy.io import fits
-file = r"D:\Documents\GitHub\Yale_Astro330_LABS\data\lab5_data\spec1d_DE.20110603.45055-n7006a_DEIMOS_2011Jun03T123053.021.fits"
+OBSERVED_FILE = r"D:\Documents\GitHub\Yale_Astro330_LABS\data\lab5_data\spec1d_DE.20110603.45055-n7006a_DEIMOS_2011Jun03T123053.021.fits"
+TEMPLATE_FILE = r"D:\Documents\GitHub\Yale_Astro330_LABS\data\lab5_data\dmost_lte_5000_3.0_-2.0_.fits"
 
-hdu = fits.open(file)
+STAR_IDS = [121, 135, 157]
+CAII_REST_WAVELENGTHS = [8500.36, 8544.44, 8664.52]
+C_KMS = 2.997924e5  # 光速，单位 km/s；速度也使用 km/s。
+
+# 这个 FITS 文件里有很多 extension；每颗星对应其中一个 extension。
+observed_hdu = fits.open(OBSERVED_FILE)
+
+
+# %% Q3：先看数据，并用 Ca II 吸收线目测速度
 
 'Q3:Question 3: Plotting 1D PypeIt output spectra and fitting by eye'
-starlist = [121,135,157]
-for i in starlist:
-    data = hdu[i].data
 
-    fig,ax = plt.subplots(figsize=(15,3))
-    plt.plot(data['OPT_WAVE'],data['OPT_COUNTS'])
-    plt.title('Star ID: {}'.format(i))
-    plt.xlim(8300,8850)
-    plt.xlabel('Wavelength (Ang)')
-    plt.ylabel('Counts')
+# 第一步只画图，不拟合。目的是熟悉光谱，并给后面的速度搜索一个大概初值。
+for star_id in STAR_IDS:
+    spectrum = observed_hdu[star_id].data
+
+    fig, ax = plt.subplots(figsize=(15, 3))
+    ax.plot(spectrum["OPT_WAVE"], spectrum["OPT_COUNTS"])
+    ax.set_xlim(8300, 8850)
+    ax.set_xlabel("Wavelength (Å)")
+    ax.set_ylabel("Counts")
+    ax.set_title(f"Star ID: {star_id}")
+    fig.tight_layout()
     plt.show()
 
 '''为了大致了解每颗恒星的速度，你可以尝试“目测”粗略估计一下。上面光谱中最强的三条谱线来自 CaII: 8500.36、8544.44 和 8664.52 埃。
 你估计它们的速度是多少？'''
-data = hdu[121].data
-wave = data["OPT_WAVE"]
-flux = data["OPT_COUNTS"]
 
-plt.figure(figsize=(10, 4))
-plt.plot(wave, flux)
-ca_lines = [8500.36, 8544.44, 8664.52]
-for line in ca_lines:
-    plt.figure(figsize=(8, 3))
-    plt.plot(wave, flux)
-    plt.axvline(line, linestyle="--")
-    plt.xlim(line - 25, line + 10)
-    plt.xlabel("Wavelength (Å)")
-    plt.ylabel("Counts")
-    plt.title(f"Ca II line near {line:.2f} Å")
-    plt.grid()
+# 先拿 star 121 做放大示范：虚线是 Ca II 的静止波长，吸收线实际位置与它的
+# 偏移量可以给出一个粗略速度。要看别的星，只需修改 EXAMPLE_STAR_ID。
+EXAMPLE_STAR_ID = 121
+example_spectrum = observed_hdu[EXAMPLE_STAR_ID].data
+example_wave = example_spectrum["OPT_WAVE"]
+example_flux = example_spectrum["OPT_COUNTS"]
+
+for rest_wavelength in CAII_REST_WAVELENGTHS:
+    fig, ax = plt.subplots(figsize=(8, 3))
+    ax.plot(example_wave, example_flux)
+    ax.axvline(rest_wavelength, color="black", linestyle="--", label="Rest wavelength")
+    ax.set_xlim(rest_wavelength - 25, rest_wavelength + 10)
+    ax.set_xlabel("Wavelength (Å)")
+    ax.set_ylabel("Counts")
+    ax.set_title(f"Star {EXAMPLE_STAR_ID}: Ca II near {rest_wavelength:.2f} Å")
+    ax.legend()
+    ax.grid(alpha=0.3)
+    fig.tight_layout()
     plt.show()
+
+
+# %% Q4：读取合成模板
+
 '''Question 4: Synthetic model spectra'''
 '''可以通过测量已知吸收线的中心（目测或拟合高斯函数）并将其与恒星的静止波长进行比较，来测量恒星的速度。
 虽然这种方法可以估算恒星的速度，但它浪费了完整光谱中的大部分信息。为了确定更精确的速度，我们采用“模板拟合”方法，
@@ -66,163 +85,247 @@ for line in ca_lines:
 模板光谱可以是经验性的（已知速度的标准恒星的观测光谱），也可以是合成的（根据恒星模型数值计算得出）。
 这里我们将使用来自 PHEONIX 库的合成模板:https://phoenix.astro.physik.uni-goettingen.de/'''
 
-template_file = r"D:\Documents\GitHub\Yale_Astro330_LABS\data\lab5_data\dmost_lte_5000_3.0_-2.0_.fits"
-def read_synthetic_spectrum(pfile):
-    '''
-    Function to load synthetic template file into python using vacuum wavelengths
-    
-    Parameters
-    ----------
-    pfile: str
-        path to the synthitic fits file to load. 
-        
-    Returns
-    -------
-    pwave: float array
-        Wavelengths of synthetic spectrum
-    pflux: float array
-        Flux of sythetic spectrum
-    '''
+# 目测只使用几条谱线；模板拟合则会利用整个波段的信息。
+def read_synthetic_spectrum(file_path):
+    """读取 PHOENIX 模板，返回真空波长和模板通量。"""
+    with fits.open(file_path) as template_hdu:
+        template_table = template_hdu[1].data
 
-    with fits.open(pfile) as hdu:
-        data     = hdu[1].data
-        
-    pflux = np.array(data['flux']).flatten()
-    awave = np.exp((data['wave']).flatten())
-    
+    template_flux = np.asarray(template_table["flux"]).flatten()
+
+    # 文件保存的是空气波长的自然对数，先还原空气波长。
+    air_wavelength = np.exp(np.asarray(template_table["wave"]).flatten())
+
     # CONVERTING AIR WAVELENGTHS TO VACUUM
-    s = 10**4 / awave
-    n = 1. + 0.00008336624212083 + \
-            (0.02408926869968 / (130.1065924522 - s**2)) +\
-            (0.0001599740894897 / (38.92568793293 - s**2))
+    # 观测数据使用真空波长，因此按课程给出的公式把空气波长转换成真空波长。
+    s = 1e4 / air_wavelength
+    refractive_index = (
+        1
+        + 0.00008336624212083
+        + 0.02408926869968 / (130.1065924522 - s**2)
+        + 0.0001599740894897 / (38.92568793293 - s**2)
+    )
+    vacuum_wavelength = air_wavelength * refractive_index
 
-    pwave  = awave*n
-    
-    return pwave, pflux
-'''Question 5: Synthetic model spectra -- Smoothing and Continuum fitting'''
-'''我们将把合成光谱拟合到科学数据，目的是确定科学光谱的速度。合成光谱的速度为零。为了与科学数据匹配，我们需要：
-(1)将合成光谱平滑到科学数据的波长分辨率；
-(2)将合成光谱平移到科学数据的速度；
-(3)重新分箱合成光谱并匹配连续谱水平。'''
-
-'Smoothing the templates '
-'''我们首先讨论如何平滑合成光谱以使其与数据匹配。我们将在下文中拟合该值，但现在，我们先根据单点估计选择一个数值。
-DEIMOS 光谱线可以用线宽约为 0.5 埃的 1- σ 高斯函数很好地拟合。合成光谱的分辨率为 0.02 埃。
-因此，我们需要使用 0.5/0.02 = 25 像素的高斯核来平滑合成光谱。'''
-
-def Gaussian_smooth(pwave, pflux, sigma):
-    '''
-    Function to smooth synthetic template spectrum using a Gaussian kernel
-    
-    Parameters
-    ----------
-    pwave: float array
-        Wavelengths of synthetic spectrum
-    pflux: float array
-        Flux of sythetic spectrum
-    sigma: float
-        Width of Gaussian kernel in pixels
-        
-    Returns
-    -------
-    pflux_smooth: float array
-        Smoothed flux of sythetic spectrum
-    '''
-    
-    pflux_smoothed = gaussian_filter1d(pflux, sigma)
-    
-    return pflux_smoothed
-
-'Fitting the Continuum'
-'''接下来，我们将讨论上述步骤 (3)，即光谱的整体形状和数值，我们称之为“连续谱”。
-让我们用一个函数拟合合成光谱，使其与科学光谱大致相同。
-对于我们正在处理的光谱部分，线性函数（例如，我们在实验 4 中拟合的函数）就足够了。
-为此，我们首先将合成光谱按波长重新分箱到与数据相同的数组中。'''
-
-# 思路
-# # 1) 读模板
-# template_wave, template_flux = read_synthetic_spectrum(template_file)
-
-# # 2) 平滑模板
-# template_flux = Gaussian_smooth(template_wave, template_flux, sigma=25)
-
-# # 3) 重采样到观测数据波长
-# data_wave = data["OPT_WAVE"]
-# # 把模板插值到观测数据的波长网格
-# template_on_data_wave = np.interp(data_wave, template_wave, template_flux)
-# '''np.interp 会在每个观测波长位置，取出对应模板值
-# 这样两者就能一一对应地比较了。'''
-
-# # 4) 选择一个波长区间
-# mask = (data_wave > 8400) & (data_wave < 8700)
-# x = data_wave[mask]
-# y = template_on_data_wave[mask]
-
-# # 5) 迭代拟合 continuum
-# for _ in range(5):
-#     m, b = np.polyfit(x, y, 1)
-#     continuum = m * x + b
-#     residual = y - continuum
-#     good = np.abs(residual) < 3 * np.std(residual)
-#     x = x[good]
-#     y = y[good]
-
-# # 6) 归一化
-# template_norm = template_on_data_wave / (m * data_wave + b)
+    return vacuum_wavelength, template_flux
 
 
-def rebin_template_to_data(data_wave, template_wave, template_flux):
-    rebinned_flux = np.interp(data_wave, template_wave, template_flux)
-    return rebinned_flux
+# %% Q5：把理论模板变成能与观测光谱直接比较的模型
+
+'''Question 5: Smoothing and continuum fitting
+把理论模板处理成和观测光谱可以直接比较的模型。
+课程思路：先平滑模板，再把模板插值到观测波长，最后匹配连续谱。
+'''
+
+def smooth_spectrum(flux, sigma=25):
+    """把高分辨率合成光谱平滑到 DEIMOS 的分辨率。
+
+    把模板中过窄的谱线平滑到 DEIMOS 能分辨的宽度。
+    """
+    # 课程给出的宽度是 0.5 Å，而模板每个像素是 0.02 Å：0.5 / 0.02 = 25。
+    # DEIMOS 的线宽约 0.5 Å，模板每个像素约 0.02 Å，所以 sigma = 0.5 / 0.02 = 25。
+    return gaussian_filter1d(flux, sigma, truncate=3)
 
 
-def fit_continuum(data_wave, data_flux, template_wave, template_flux):
-    rebinned_template = rebin_template_to_data(data_wave, template_wave, template_flux)
+def fit_continuum(template_wave, template_flux, data_wave, data_flux):
+    """将模板重采样到观测波长，并调整到与观测 counts 相同的连续谱。
 
-    mask = (data_wave > 8400) & (data_wave < 8700)
-    x = data_wave[mask]
-    y = rebinned_template[mask]
+    让模板和观测数据使用相同的波长点、相同的 counts 尺度。
+    """
+    # 第一步：rebin。让模板和观测数据拥有完全相同的波长位置。
+    # 模板和数据的波长采样不同。插值以后，两条光谱才能逐点比较。
+    template_on_data_grid = np.interp(
+        data_wave,
+        template_wave,
+        template_flux,
+        left=np.nan,
+        right=np.nan,
+    )
 
-    for _ in range(10):
-        m, b = np.polyfit(x, y, 1)
-        continuum = m * x + b
-        residual = y - continuum
-        good = np.abs(residual) < 3 * np.std(residual)
+    # 第二步：观测 / 模板。吸收线以外的整体变化就是需要拟合的 continuum。
+    # 模板通常在 1 附近，观测值却是 counts。data/template 给出需要乘回模板的
+    # 缓慢变化背景，也就是这里要拟合的 continuum。
+    response = data_flux / template_on_data_grid
 
-        if np.sum(good) < 10:
-            break
+    # 第三步：照课程答案去掉最低 20% 和最高 1%，避免吸收线和离群点影响拟合。
+    # 很低的点多半是吸收线，很高的点可能是坏像素；都不适合决定背景形状。
+    good = np.isfinite(response)
+    low, high = np.percentile(response[good], [20, 99])
+    good &= (response > low) & (response < high)
 
-        x = x[good]
-        y = y[good]
+    # 第四步：用一次多项式（直线）拟合 continuum，并乘回模板得到最终模型。
+    # 这个波段的背景变化不大，用一条直线已经足够。
+    continuum_coefficients = np.polyfit(data_wave[good], response[good], 1)
+    continuum_curve = np.polyval(continuum_coefficients, data_wave)
 
-    coeff = np.polyfit(x, y, 1)
-    continuum_model = np.polyval(coeff, data_wave)
+    # 最终 model 同时具有模板的吸收线形状和观测数据的 counts 尺度。
+    model_flux = template_on_data_grid * continuum_curve
+    return model_flux
 
-    normalized_template = rebinned_template / continuum_model
-    normalized_data = data_flux / continuum_model
 
-    return continuum_model, normalized_template, normalized_data
-'绘制结果'
-template_wave, template_flux = read_synthetic_spectrum(template_file)
-template_flux = Gaussian_smooth(template_wave, template_flux, sigma=25)
+template_wave, template_flux = read_synthetic_spectrum(TEMPLATE_FILE)
+# 三颗星使用同一个模板，所以只需平滑一次。
+# 所有星使用同一模板，平滑一次即可。
+template_smooth = smooth_spectrum(template_flux)
 
-data_wave = data["OPT_WAVE"]
-data_flux = data["OPT_COUNTS"]
+for star_id in STAR_IDS:
+    # 从 PypeIt 输出中读取波长、counts 和 inverse variance。
+    spectrum = observed_hdu[star_id].data
+    data_wave = spectrum["OPT_WAVE"]
+    data_flux = spectrum["OPT_COUNTS"]
 
-continuum_model, norm_template, norm_data = fit_continuum(
-    data_wave, data_flux, template_wave, template_flux
-)
+    # Q5 暂时假设速度为 0，只检查平滑与连续谱匹配是否正确。
+    # Q5 暂时令 v=0。此时主要检查模型的宽度和整体高度是否接近数据；
+    # 吸收线横向错开是正常的，Q6 才会寻找正确速度。
+    zero_velocity_model = fit_continuum(
+        template_wave, template_smooth, data_wave, data_flux
+    )
 
-plt.figure(figsize=(12, 5))
-plt.title("Continuum fit and normalized spectra")
-plt.plot(data_wave, data_flux, label="science spectrum", alpha=0.8)
-plt.plot(data_wave, continuum_model, label="continuum fit", color="red", lw=2)
+    # 保存数据，Q6 会直接使用，避免再次读取 FITS。
+    # 这条原始注释按要求保留；当前清晰版在 Q6 中重新按列命名这些数据。
 
-plt.plot(data_wave, norm_data, label="normalized science", color="orange")
-plt.plot(data_wave, norm_template, label="normalized template", color="green")
+    fig, ax = plt.subplots(figsize=(12, 4))
+    ax.plot(data_wave, data_flux, label="Science spectrum")
+    ax.plot(data_wave, zero_velocity_model, label="Zero-velocity model")
+    ax.set_xlim(8300, 8700)
+    ax.set_xlabel("Wavelength (Å)")
+    ax.set_ylabel("Counts")
+    ax.set_title(f"Q5: Star ID {star_id}")
+    ax.legend()
+    fig.tight_layout()
+    plt.show()
 
-plt.xlim(8400, 8700)
-plt.xlabel("Wavelength")
-plt.ylabel("Flux")
-plt.legend()
-plt.show()
+
+# %% Q6：尝试很多速度，找出 chi-square 最小的那个
+
+'''Question 6: chi-square fitting to find velocity
+
+课程思路：尝试一系列速度；每个速度都移动模板、重新匹配连续谱并计算 chi-square。
+chi-square 最小的位置就是最佳速度，chi2_min + 1 给出一个参数的 1-sigma 误差。
+'''
+
+def calc_chi2(data_flux, model_flux, inverse_variance):
+    """使用 inverse variance 计算加权 chi-square。
+
+    返回观测光谱与模型之间的加权差异；数值越小，匹配越好。
+    """
+    # 课程公式：chi2 = Σ inverse_variance × (data - model)^2。
+    # ivar <= 0 或非有限值代表无效像素，不能参与拟合。
+    # inverse variance 越大，说明这个像素越可靠，在总分中占的权重也越大。
+    good = (
+        np.isfinite(data_flux)
+        & np.isfinite(model_flux)
+        & np.isfinite(inverse_variance)
+        & (inverse_variance > 0)
+    )
+    residual = data_flux[good] - model_flux[good]
+    return np.sum(inverse_variance[good] * residual**2)
+
+
+def estimate_velocity_error(velocities, chi2_values, best_index):
+    """用 chi2_min + 1 左右两个交点估计速度的 1-sigma 误差。"""
+    # 课程用 chi2 < chi2_min + 1 估计 1-sigma。
+    # 这里再对左右交点做线性插值，避免误差因为网格离散而显示成 0。
+    target_chi2 = chi2_values[best_index] + 1
+
+    # 从最小值向左、向右找第一个越过 target_chi2 的位置。
+    left_candidates = np.where(chi2_values[:best_index] >= target_chi2)[0]
+    right_candidates = np.where(chi2_values[best_index:] >= target_chi2)[0]
+    left_index = left_candidates[-1]
+    right_index = best_index + right_candidates[0]
+
+    # 交点通常落在两个网格点之间，所以做一次直线插值，避免误差被显示成 0。
+    left_velocity = np.interp(
+        target_chi2,
+        chi2_values[left_index:left_index + 2][::-1],
+        velocities[left_index:left_index + 2][::-1],
+    )
+    right_velocity = np.interp(
+        target_chi2,
+        chi2_values[right_index - 1:right_index + 1],
+        velocities[right_index - 1:right_index + 1],
+    )
+    return (right_velocity - left_velocity) / 2
+
+
+def fit_velocity(
+    data_wave,
+    data_flux,
+    inverse_variance,
+    template_wave,
+    template_flux,
+    velocity_guess,
+):
+    """在初始猜测附近搜索最佳速度及其 1-sigma 误差。
+
+    在目测速度附近搜索，返回速度网格、chi-square、最佳速度和误差。
+    """
+    # 以 Q3 的目测速度为中心，搜索前后 25 km/s；课程答案的步长是 0.05 km/s。
+    candidate_velocities = np.arange(
+        velocity_guess - 25, velocity_guess + 25, 0.05
+    )
+    chi2_values = []
+
+    for velocity in candidate_velocities:
+        # Doppler 公式：移动模板波长 λ_shift = λ × (1 + v/c)。
+        # 这个速度假设只改变模板谱线的横向位置，不改变模板的吸收线形状。
+        shifted_template_wave = template_wave * (1 + velocity / C_KMS)
+
+        # 速度改变后要重新 rebin 和拟合 continuum，再与观测数据比较。
+        # template_smooth 已在 Q5 平滑过；不必在每次循环中重复平滑。
+        # 把移动后的模板放到观测波长网格，并重新匹配 continuum。
+        model_flux = fit_continuum(
+            shifted_template_wave, template_flux, data_wave, data_flux
+        )
+        chi2_values.append(calc_chi2(data_flux, model_flux, inverse_variance))
+
+    chi2_values = np.array(chi2_values)
+    # 最小 chi-square 对应最佳速度。
+    best_index = np.argmin(chi2_values)
+    best_velocity = candidate_velocities[best_index]
+    velocity_error = estimate_velocity_error(
+        candidate_velocities, chi2_values, best_index
+    )
+
+    return candidate_velocities, chi2_values, best_velocity, velocity_error
+
+
+# Q3 的目测初值；每颗星只需在初值附近搜索。
+velocity_guesses = {121: -400, 135: -405, 157: -50}
+
+# 分别拟合三颗星，并打印、绘制每颗星的 chi-square 曲线。
+for star_id in STAR_IDS:
+    spectrum = observed_hdu[star_id].data
+    data_wave = spectrum["OPT_WAVE"]
+    data_flux = spectrum["OPT_COUNTS"]
+    inverse_variance = spectrum["OPT_COUNTS_IVAR"]
+
+    velocities, chi2_values, best_velocity, velocity_error = fit_velocity(
+        data_wave,
+        data_flux,
+        inverse_variance,
+        template_wave,
+        template_smooth,
+        velocity_guesses[star_id],
+    )
+
+    print(
+        f"Star {star_id}: "
+        f"v = {best_velocity:.1f} +/- {velocity_error:.3f} km/s"
+    )
+
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.plot(velocities, chi2_values, ".")
+    ax.axvline(best_velocity, color="red", label="Best velocity")
+    ax.set_xlabel("Velocity (km/s)")
+    ax.set_ylabel("χ²")
+    ax.set_title(
+        f"Q6: Star {star_id}, "
+        f"v = {best_velocity:.1f} +/- {velocity_error:.3f} km/s"
+    )
+    ax.legend()
+    fig.tight_layout()
+    plt.show()
+
+
+observed_hdu.close()
