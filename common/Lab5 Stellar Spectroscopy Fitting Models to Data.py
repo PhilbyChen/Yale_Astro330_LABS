@@ -39,7 +39,6 @@ C_KMS = 2.997924e5  # 光速，单位 km/s；速度也使用 km/s。
 # 这个 FITS 文件里有很多 extension；每颗星对应其中一个 extension。
 observed_hdu = fits.open(OBSERVED_FILE)
 
-# 所有图共用一个连续编号，标题格式为 lab5_figure#_图内容。
 figure_number = 1
 
 
@@ -47,7 +46,6 @@ figure_number = 1
 
 'Q3:Question 3: Plotting 1D PypeIt output spectra and fitting by eye'
 
-# 第一步只画图，不拟合。目的是熟悉光谱，并给后面的速度搜索一个大概初值。
 for star_id in STAR_IDS:
     spectrum = observed_hdu[star_id].data
 
@@ -68,8 +66,7 @@ for star_id in STAR_IDS:
 '''为了大致了解每颗恒星的速度，你可以尝试“目测”粗略估计一下。上面光谱中最强的三条谱线来自 CaII: 8500.36、8544.44 和 8664.52 埃。
 你估计它们的速度是多少？'''
 
-# 先拿 star 121 做放大示范：虚线是 Ca II 的静止波长，吸收线实际位置与它的
-# 偏移量可以给出一个粗略速度。要看别的星，只需修改 EXAMPLE_STAR_ID。
+# 虚线是 Ca II 的静止波长，吸收线实际位置与它的偏移量可以给出一个粗略速度
 EXAMPLE_STAR_ID = 121
 example_spectrum = observed_hdu[EXAMPLE_STAR_ID].data
 example_wave = example_spectrum["OPT_WAVE"]
@@ -183,8 +180,6 @@ def fit_continuum(template_wave, template_flux, data_wave, data_flux):
 
 
 template_wave, template_flux = read_synthetic_spectrum(TEMPLATE_FILE)
-# 三颗星使用同一个模板，所以只需平滑一次。
-# 所有星使用同一模板，平滑一次即可。
 template_smooth = smooth_spectrum(template_flux)
 
 for star_id in STAR_IDS:
@@ -358,4 +353,53 @@ for star_id in STAR_IDS:
     figure_number += 1
 
 
-observed_hdu.close()
+
+'''Question 7: χ2 fitting with more parameters'''
+'''在问题 6 中，我们将平滑值固定为 25 像素，并使用单个函数来匹配合成数据与科学数据的连续性。
+接下来，我们重新处理 χ2，但这次将这些值包含在拟合中。这将是一个双参数卡方拟合。
+同时寻找“谱线应该移动多少”和“谱线应该变宽多少”；找到最佳组合以后，
+让平滑宽度可以自由变化，再根据 χ² 最低点附近允许的速度范围计算速度误差。
+ '''
+# #先找到整个二维网格里的最低 χ²：
+# chi2_min = np.min(chi2_values)
+# 然后寻找满足下面条件的区域：
+# chi2_values < chi2_min + 1
+
+# 输入：wave，Flux，ivar，
+#      template_wave，template_flux，
+#      搜索范围：velocity_grid，smooth_grid
+#输出：best_velocity
+#      best_smoothing
+#      velocity_error
+
+# 伪代码：
+# 读取数据：观测波长, 观测通量, 观测 inverse variance, 模板波长, 模板通量
+
+# 对每颗星：
+#     筛选波长范围
+#     建立速度grid：根据每颗星的大致速度v0设置搜索范围与步长精度
+#     建立平滑grid
+#     准备保存结果 list： velocity，smoothing，chi2
+#       对grid中的每个速度：
+#           移动模板波长
+#               对grid中的每个平滑宽度：
+#                 平滑模板
+#                 拟合连续谱
+#                 计算 chi2
+#                 保存结果到 list
+#                 在所有chi2中寻找最小值，并返回best_velocity，best_smoothing
+#                 计算速度误差：
+#                     找到最低点附近满足 chi2 < chi2_min + 1 的区域。
+#                     查看这个区域在速度方向上延伸到哪里。
+#                     得到速度的左边界和右边界。
+#                     用左右宽度估计速度误差。 Verror = (vright-vleft) / 2
+
+for star_id in STAR_IDS:
+    spectrum = observed_hdu[star_id].data
+    data_wave = spectrum["OPT_WAVE"]
+    data_flux = spectrum["OPT_COUNTS"]
+    inverse_variance = spectrum["OPT_COUNTS_IVAR"]
+
+    velocity_guess = velocity_guesses[star_id]
+    velocity_grid = np.arange(velocity_guess - 25, velocity_guess + 25, 0.05)
+    smooth_grid = np.arange(10, 50, 1)
