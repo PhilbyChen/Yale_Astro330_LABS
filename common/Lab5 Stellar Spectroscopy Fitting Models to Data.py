@@ -372,8 +372,8 @@ for star_id in STAR_IDS:
 #      best_smoothing
 #      velocity_error
 
-# 伪代码：
-# 读取数据：观测波长, 观测通量, 观测 inverse variance, 模板波长, 模板通量
+## 伪代码：
+# 使用数据：观测波长, 观测通量, 观测 inverse variance, 模板波长, 模板通量
 
 # 对每颗星：
 #     筛选波长范围
@@ -403,3 +403,15 @@ for star_id in STAR_IDS:
     velocity_guess = velocity_guesses[star_id]
     velocity_grid = np.arange(velocity_guess - 25, velocity_guess + 25, 0.05)
     smooth_grid = np.arange(10, 50, 1)
+
+
+
+
+
+
+
+
+
+
+
+    
