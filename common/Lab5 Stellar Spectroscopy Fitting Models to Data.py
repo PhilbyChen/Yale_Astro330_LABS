@@ -521,9 +521,59 @@ for star_id in STAR_IDS:
     figure_number += 1
 
 
+'''Question 8: MCMC with to find velocity
+使用MCMC重新进行问题7的任务
+建议编写一个单一的函数 make_model ，
+该函数能够根据给定的速度值和平滑处理结果，生成一个新的合成模型谱图。
+请报告你认为最合适的拟合速度值以及相关的误差范围。
+
+你可以选择仅拟合两个参数（速度和平滑度），或者作为额外选项，
+拟合所有四个参数（速度、平滑度以及连续拟合值）。
+'''
+
+def make_model(theta, data):
+    # velocity, smoothing = theta
+    # 移动模板
+    # 平滑模板
+    # 匹配 continuum
+    # return model
+    pass
 
 
+def log_likelihood(theta, data):
+    # model = make_model(...)
+    # chi2 = ...
+    # return -0.5 * chi2
+    pass
 
+
+def log_prior(theta):
+    # 如果参数合理：return 0
+    # 否则：return -np.inf
+    pass
+
+
+def log_probability(theta, data):
+    # return log_prior + log_likelihood
+    pass
+
+
+for star_id in STAR_IDS:
+    # 读取并筛选这颗星的数据
+
+    # 设置 walkers、steps 和初始位置
+
+    # 建立 emcee sampler
+
+    # 运行 MCMC
+
+    # 去掉 burn-in
+
+    # 计算 velocity 的中位数和误差
+
+    # 画 trace plot
+
+    # 画 corner plot
 
 
 
