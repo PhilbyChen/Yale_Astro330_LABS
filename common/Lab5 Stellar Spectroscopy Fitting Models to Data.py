@@ -400,11 +400,125 @@ for star_id in STAR_IDS:
     data_flux = spectrum["OPT_COUNTS"]
     inverse_variance = spectrum["OPT_COUNTS_IVAR"]
 
+    # 建立速度与平滑grid
     velocity_guess = velocity_guesses[star_id]
-    velocity_grid = np.arange(velocity_guess - 25, velocity_guess + 25, 0.05)
-    smooth_grid = np.arange(10, 50, 1)
+    velocity_grid = np.arange(velocity_guess - 15, velocity_guess + 15, 0.1)
+    smooth_grid = np.arange(5, 30, 1)
 
+    # 三个列表共同记录每一次参数组合及其 chi-square。
+    velocity_list = []
+    smoothing_list = []
+    chi2_list = []
 
+    mask = (
+        (data_wave > 8300)
+        & (data_wave < 8700)
+        & np.isfinite(data_wave)
+        & np.isfinite(data_flux)
+        & np.isfinite(inverse_variance)
+        & (inverse_variance > 0)
+    )
+    fitwave = data_wave[mask]
+    fitflux = data_flux[mask]
+    fit_ivar = inverse_variance[mask]
+
+    for velocity in velocity_grid:
+        shifted_template_wave = template_wave * (1 + velocity / C_KMS)
+
+        for smooth in smooth_grid:
+            smoothed_template = smooth_spectrum(
+                template_flux,
+                sigma=smooth,
+            )
+
+            model_flux = fit_continuum(
+                shifted_template_wave,
+                smoothed_template,
+                fitwave,
+                fitflux,
+            )
+
+            chi2 = calc_chi2(
+                fitflux,
+                model_flux,
+                fit_ivar,
+            )
+
+            velocity_list.append(velocity)
+            smoothing_list.append(smooth)
+            chi2_list.append(chi2)
+
+    # 注意这里已经退出了上面的两层循环。
+
+    # 把全部 chi2 整理成二维网格。
+    # 简化版不再 reshape；三个同样长的 array 已保存二维网格的所有组合。
+    velocity_array = np.array(velocity_list)
+    smoothing_array = np.array(smoothing_list)
+    chi2_array = np.array(chi2_list)
+    best_index = np.argmin(chi2_array)
+    chi2_min = chi2_array[best_index]
+
+    # 每个速度只保留最好的 chi2。
+    # 等价地，这里直接保留所有 chi2 < chi2_min + 1 的组合，让平滑宽度自由变化。
+    error_mask = chi2_array < chi2_min + 1
+    allowed_velocities = velocity_array[error_mask]
+
+    # 找到最佳速度。
+    best_velocity = velocity_array[best_index]
+
+    # 使用 Q6 的函数计算速度误差。
+    # 简化版按课程参考答案直接取速度范围的一半，因此不再调用该函数。
+    velocity_error = (
+        np.max(allowed_velocities) - np.min(allowed_velocities)
+    ) / 2
+
+    # 找到最佳速度下的最佳平滑宽度。
+    best_smoothing = smoothing_array[best_index]
+
+    # 画 velocity-smoothing-chi2 图。
+    fig, ax = plt.subplots(figsize=(8, 5))
+
+    points = ax.scatter(
+        velocity_array,
+        smoothing_array,
+        c=chi2_array,
+        marker="o",
+        s=35,
+        vmin=chi2_min,
+        vmax=chi2_min + 1000,
+    )
+
+    # 用红点标出最佳速度和平滑宽度。
+    ax.plot(
+        best_velocity,
+        best_smoothing,
+        "ro",
+        label="Best fit",
+    )
+
+    ax.set_xlabel("Velocity (km/s)")
+    ax.set_ylabel("Smoothing width (pixels)")
+    ax.set_title(
+        f"Star {star_id}: "
+        f"v = {best_velocity:.1f} +/- {velocity_error:.2f} km/s, "
+        f"smoothing = {best_smoothing:.0f} pixels"
+    )
+
+    # 颜色条说明散点颜色代表 chi-square。
+    colorbar = fig.colorbar(points, ax=ax)
+    colorbar.set_label("χ²")
+
+    ax.legend()
+
+    fig.suptitle(
+        f"l5f{figure_number}_s{star_id}_"
+        f"velocity_smoothing_chi-square"
+    )
+    fig.tight_layout()
+    fig.subplots_adjust(top=0.82)
+    plt.show()
+
+    figure_number += 1
 
 
 
